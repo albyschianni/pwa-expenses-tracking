@@ -1,24 +1,44 @@
-<script setup lang="ts">
-
-</script>
-
 <template>
-  <div class="bg-gray-100 dark:bg-gray-900 text-black dark:text-white min-h-screen flex items-center justify-center">
-    <h1 class="text-3xl font-bold">Tailwind + Dark Mode Funziona! 🎉</h1>
+  <div class="relative min-h-screen bg-gray-900">
+    <!-- HEADER -->
+    <AppHeader @open-month-picker="monthPickerOpen = true" />
+
+    <!-- MAIN CONTENT -->
+    <main class="pt-14 pb-20 overflow-y-auto">
+      <HomePage />
+    </main>
+
+    <!-- TAB BAR (includes centered FAB) -->
+    <TabBar @fab-click="sheetOpen = true" />
+
+    <!-- ACTION SHEET -->
+    <ActionSheet
+      :open="sheetOpen"
+      @close="sheetOpen = false"
+      @select="handleSheetAction"
+    />
+
+    <!-- MONTH PICKER -->
+    <MonthPicker
+      :open="monthPickerOpen"
+      @close="monthPickerOpen = false"
+    />
   </div>
 </template>
 
-<style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+<script setup>
+import { ref } from 'vue'
+import AppHeader from "./components/AppHeader.vue"
+import TabBar from "./components/TabBar.vue"
+import ActionSheet from "./components/ActionSheet.vue"
+import MonthPicker from "./components/MonthPicker.vue"
+import HomePage from "./pages/HomePage.vue"
+
+const sheetOpen = ref(false)
+const monthPickerOpen = ref(false)
+
+function handleSheetAction(actionId) {
+  console.log('Selected action:', actionId)
+  // TODO: navigate to expense/income/transfer form
 }
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
-}
-</style>
+</script>
