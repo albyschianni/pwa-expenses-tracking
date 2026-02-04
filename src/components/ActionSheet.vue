@@ -13,23 +13,52 @@
     <Transition name="slide-up">
       <div
         v-if="open"
-        class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-2xl z-50 pb-8"
+        class="fixed bottom-0 left-0 right-0 bg-gray-800 rounded-t-2xl z-50 pb-8"
       >
         <!-- Handle -->
         <div class="flex justify-center pt-3 pb-4">
-          <div class="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+          <div class="w-10 h-1 bg-gray-600 rounded-full" />
         </div>
 
         <!-- Actions -->
         <div class="px-4 space-y-2">
+          <!-- Expense -->
           <button
-            v-for="action in actions"
-            :key="action.id"
-            @click="handleAction(action)"
-            class="w-full flex items-center gap-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 transition-colors"
+            @click="handleAction('expense')"
+            class="w-full flex items-center gap-4 p-4 rounded-xl bg-gray-700 active:bg-gray-600 transition-colors"
           >
-            <span class="text-2xl">{{ action.icon }}</span>
-            <span class="text-gray-900 dark:text-gray-100 font-medium">{{ action.label }}</span>
+            <div class="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center">
+              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+            </div>
+            <span class="text-white font-medium">Nuova spesa</span>
+          </button>
+
+          <!-- Income -->
+          <button
+            @click="handleAction('income')"
+            class="w-full flex items-center gap-4 p-4 rounded-xl bg-gray-700 active:bg-gray-600 transition-colors"
+          >
+            <div class="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
+              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+            </div>
+            <span class="text-white font-medium">Nuova entrata</span>
+          </button>
+
+          <!-- Transfer -->
+          <button
+            @click="handleAction('transfer')"
+            class="w-full flex items-center gap-4 p-4 rounded-xl bg-gray-700 active:bg-gray-600 transition-colors"
+          >
+            <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
+              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+              </svg>
+            </div>
+            <span class="text-white font-medium">Trasferimento</span>
           </button>
         </div>
 
@@ -37,7 +66,7 @@
         <div class="px-4 mt-4">
           <button
             @click="$emit('close')"
-            class="w-full p-4 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-medium active:bg-gray-200 dark:active:bg-gray-600 transition-colors"
+            class="w-full p-4 rounded-xl bg-gray-700 text-gray-400 font-medium active:bg-gray-600 transition-colors"
           >
             Annulla
           </button>
@@ -54,14 +83,8 @@ defineProps({
 
 const emit = defineEmits(['close', 'select'])
 
-const actions = [
-  { id: 'expense', icon: '💸', label: 'Nuova spesa' },
-  { id: 'income', icon: '💰', label: 'Nuova entrata' },
-  { id: 'transfer', icon: '🔄', label: 'Trasferimento' },
-]
-
-function handleAction(action) {
-  emit('select', action.id)
+function handleAction(actionId) {
+  emit('select', actionId)
   emit('close')
 }
 </script>
