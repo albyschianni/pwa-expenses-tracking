@@ -1,7 +1,10 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { supabase, type DbExpense } from '../lib/supabase'
+import { useAuth } from './useAuth'
+import { useSelectedMonth } from './useSelectedMonth'
 
 export interface Expense {
-  id: number
+  id: string
   description: string
   date: string // ISO format: YYYY-MM-DD
   amount: number
@@ -10,7 +13,7 @@ export interface Expense {
   color: string
 }
 
-// Category configuration with icons and colors
+// Default categories (also stored in DB for consistency)
 export const CATEGORIES = [
   { id: 'food', label: 'Food & Dining', icon: '🍽️', color: '#F59E0B' },
   { id: 'coffee', label: 'Coffee & Drinks', icon: '☕', color: '#8B5CF6' },
@@ -26,26 +29,96 @@ export const CATEGORIES = [
 ] as const
 
 // Shared reactive state (singleton pattern)
-const expenses = ref<Expense[]>([
-  { id: 1, description: 'Dinner with friends', date: '2024-01-18', amount: 45.50, category: 'food', icon: '🍽️', color: '#F59E0B' },
-  { id: 2, description: 'Morning Coffee', date: '2024-01-18', amount: 5.50, category: 'coffee', icon: '☕', color: '#8B5CF6' },
-  { id: 3, description: 'Groceries & Pastry', date: '2024-01-17', amount: 78.30, category: 'groceries', icon: '🛒', color: '#10B981' },
-  { id: 4, description: 'Monthly Rent', date: '2024-01-15', amount: 1200.00, category: 'housing', icon: '🏠', color: '#3B82F6' },
-  { id: 5, description: 'Spotify Premium', date: '2024-01-15', amount: 9.99, category: 'entertainment', icon: '🎵', color: '#1DB954' },
-  { id: 6, description: 'Uber Ride', date: '2024-01-14', amount: 18.75, category: 'transport', icon: '🚗', color: '#374151' },
-  { id: 7, description: 'Gym Membership', date: '2024-01-12', amount: 49.00, category: 'health', icon: '💪', color: '#EF4444' },
-  { id: 8, description: 'Netflix', date: '2024-01-10', amount: 15.99, category: 'streaming', icon: '🎬', color: '#E50914' },
-  { id: 9, description: 'Electric Bill', date: '2024-01-08', amount: 85.00, category: 'utilities', icon: '⚡', color: '#FBBF24' },
-  { id: 10, description: 'Phone Bill', date: '2024-01-05', amount: 65.00, category: 'phone', icon: '📱', color: '#6366F1' },
-])
+const expenses = ref<Expense[]>([])
+const loading = ref(false)
+const error = ref<string | null>(null)
 
-let nextId = 11
+// Track if we've fetched for current month
+let lastFetchedMonth: string | null = null
 
 export function useExpenses() {
+  const { user, isAuthenticated } = useAuth()
+  const { monthKey } = useSelectedMonth()
+
+  // Default category fallback
+  const defaultCategory = CATEGORIES[CATEGORIES.length - 1]
+
   // Get category config by id
   function getCategoryConfig(categoryId: string) {
-    return CATEGORIES.find(c => c.id === categoryId) || CATEGORIES[CATEGORIES.length - 1]
+    return CATEGORIES.find(c => c.id === categoryId) ?? defaultCategory
   }
+
+  // Transform DB expense to frontend expense
+  function transformExpense(dbExpense: DbExpense): Expense {
+    const category = getCategoryConfig(dbExpense.category_id)
+    return {
+      id: dbExpense.id,
+      description: dbExpense.description,
+      date: dbExpense.date,
+      amount: Number(dbExpense.amount),
+      category: dbExpense.category_id,
+      icon: category.icon,
+      color: category.color,
+    }
+  }
+
+  // Fetch expenses for the selected month
+  async function fetchExpenses() {
+    if (!isAuthenticated.value || !user.value) {
+      expenses.value = []
+      return
+    }
+
+    // Get month range
+    const parts = monthKey.value.split('-').map(Number)
+    const year = parts[0] ?? new Date().getFullYear()
+    const month = parts[1] ?? (new Date().getMonth() + 1)
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0] // Last day of month
+
+    // Skip if already fetched this month
+    if (lastFetchedMonth === monthKey.value && expenses.value.length > 0) {
+      return
+    }
+
+    loading.value = true
+    error.value = null
+
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('expenses')
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false })
+
+      if (fetchError) throw fetchError
+
+      expenses.value = (data || []).map(transformExpense)
+      lastFetchedMonth = monthKey.value
+    } catch (e: any) {
+      error.value = e.message || 'Failed to fetch expenses'
+      console.error('Fetch expenses error:', e)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Watch for month changes and refetch
+  watch(monthKey, () => {
+    lastFetchedMonth = null
+    fetchExpenses()
+  })
+
+  // Watch for auth changes
+  watch(isAuthenticated, (authenticated) => {
+    if (authenticated) {
+      lastFetchedMonth = null
+      fetchExpenses()
+    } else {
+      expenses.value = []
+    }
+  })
 
   // Total expenses
   const totalExpenses = computed(() => {
@@ -67,62 +140,132 @@ export function useExpenses() {
     yesterday.setDate(yesterday.getDate() - 1)
 
     if (date.toDateString() === today.toDateString()) {
-      return 'Today'
+      return 'Oggi'
     }
     if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday'
+      return 'Ieri'
     }
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
   }
 
   // Create expense
-  function addExpense(data: Omit<Expense, 'id' | 'icon' | 'color'>) {
-    const category = getCategoryConfig(data.category)
-    const newExpense: Expense = {
-      ...data,
-      id: nextId++,
-      icon: category.icon,
-      color: category.color,
+  async function addExpense(data: { description: string; date: string; amount: number; category: string }) {
+    if (!user.value) throw new Error('Not authenticated')
+
+    loading.value = true
+    error.value = null
+
+    try {
+      const { data: newExpense, error: insertError } = await supabase
+        .from('expenses')
+        .insert({
+          user_id: user.value.id,
+          description: data.description,
+          date: data.date,
+          amount: data.amount,
+          category_id: data.category,
+        })
+        .select()
+        .single()
+
+      if (insertError) throw insertError
+
+      // Add to local state
+      const expense = transformExpense(newExpense)
+      expenses.value.push(expense)
+
+      return expense
+    } catch (e: any) {
+      error.value = e.message || 'Failed to add expense'
+      throw e
+    } finally {
+      loading.value = false
     }
-    expenses.value.push(newExpense)
-    return newExpense
   }
 
   // Update expense
-  function updateExpense(id: number, data: Partial<Omit<Expense, 'id'>>) {
-    const index = expenses.value.findIndex(e => e.id === id)
-    if (index === -1) return false
+  async function updateExpense(id: string, data: Partial<{ description: string; date: string; amount: number; category: string }>) {
+    if (!user.value) throw new Error('Not authenticated')
 
-    const expense = expenses.value[index]
+    loading.value = true
+    error.value = null
 
-    // If category changed, update icon and color
-    if (data.category && data.category !== expense.category) {
-      const category = getCategoryConfig(data.category)
-      data.icon = category.icon
-      data.color = category.color
+    try {
+      const updateData: any = {}
+      if (data.description !== undefined) updateData.description = data.description
+      if (data.date !== undefined) updateData.date = data.date
+      if (data.amount !== undefined) updateData.amount = data.amount
+      if (data.category !== undefined) updateData.category_id = data.category
+      updateData.updated_at = new Date().toISOString()
+
+      const { data: updatedExpense, error: updateError } = await supabase
+        .from('expenses')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (updateError) throw updateError
+
+      // Update local state
+      const index = expenses.value.findIndex(e => e.id === id)
+      if (index !== -1) {
+        expenses.value[index] = transformExpense(updatedExpense)
+      }
+
+      return true
+    } catch (e: any) {
+      error.value = e.message || 'Failed to update expense'
+      throw e
+    } finally {
+      loading.value = false
     }
-
-    expenses.value[index] = { ...expense, ...data }
-    return true
   }
 
   // Delete expense
-  function deleteExpense(id: number) {
-    const index = expenses.value.findIndex(e => e.id === id)
-    if (index === -1) return false
-    expenses.value.splice(index, 1)
-    return true
+  async function deleteExpense(id: string) {
+    if (!user.value) throw new Error('Not authenticated')
+
+    loading.value = true
+    error.value = null
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', id)
+
+      if (deleteError) throw deleteError
+
+      // Remove from local state
+      expenses.value = expenses.value.filter(e => e.id !== id)
+
+      return true
+    } catch (e: any) {
+      error.value = e.message || 'Failed to delete expense'
+      throw e
+    } finally {
+      loading.value = false
+    }
   }
 
   // Get single expense by id
-  function getExpense(id: number) {
+  function getExpense(id: string) {
     return expenses.value.find(e => e.id === id)
+  }
+
+  // Force refresh
+  function refresh() {
+    lastFetchedMonth = null
+    return fetchExpenses()
   }
 
   return {
     expenses,
     sortedExpenses,
     totalExpenses,
+    loading,
+    error,
     CATEGORIES,
     getCategoryConfig,
     formatDate,
@@ -130,5 +273,7 @@ export function useExpenses() {
     updateExpense,
     deleteExpense,
     getExpense,
+    fetchExpenses,
+    refresh,
   }
 }

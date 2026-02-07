@@ -1,5 +1,20 @@
 <template>
-  <div class="relative min-h-screen bg-gray-900">
+  <!-- Loading State -->
+  <div v-if="authLoading" class="min-h-screen bg-gray-900 flex items-center justify-center">
+    <div class="text-center">
+      <svg class="w-12 h-12 mx-auto text-teal-400 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+      </svg>
+      <p class="mt-4 text-gray-400">Caricamento...</p>
+    </div>
+  </div>
+
+  <!-- Auth Page -->
+  <AuthPage v-else-if="!isAuthenticated" />
+
+  <!-- Main App -->
+  <div v-else class="relative min-h-screen bg-gray-900">
     <!-- HEADER -->
     <AppHeader @open-month-picker="monthPickerOpen = true" />
 
@@ -15,9 +30,7 @@
       <div v-else-if="activeTab === 'todo'" class="p-4 text-gray-400 text-center">
         <p class="text-lg">TODO page coming soon</p>
       </div>
-      <div v-else-if="activeTab === 'settings'" class="p-4 text-gray-400 text-center">
-        <p class="text-lg">Settings page coming soon</p>
-      </div>
+      <SettingsPage v-else-if="activeTab === 'settings'" />
     </main>
 
     <!-- TAB BAR (includes centered FAB) -->
@@ -26,21 +39,6 @@
       @fab-click="openCreateExpense"
       @navigate="activeTab = $event"
     />
-
-    <!--
-      ============================================================
-      ACTION SHEET - Commented out for future use
-      This menu logic can be re-enabled when we want to offer
-      multiple options (expense, income, transfer) from the FAB.
-      ============================================================
-    -->
-    <!--
-    <ActionSheet
-      :open="sheetOpen"
-      @close="sheetOpen = false"
-      @select="handleSheetAction"
-    />
-    -->
 
     <!-- MONTH PICKER -->
     <MonthPicker
@@ -67,18 +65,21 @@
   </div>
 </template>
 
-<script setup>
-import { ref } from 'vue'
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import AppHeader from "./components/AppHeader.vue"
 import TabBar from "./components/TabBar.vue"
-// import ActionSheet from "./components/ActionSheet.vue" // Commented out - kept for future use
 import MonthPicker from "./components/MonthPicker.vue"
 import ExpenseDialog from "./components/ExpenseDialog.vue"
 import ExpenseDetailDialog from "./components/ExpenseDetailDialog.vue"
 import HomePage from "./pages/HomePage.vue"
-import { useExpenses } from "./composables/useExpenses"
+import AuthPage from "./pages/AuthPage.vue"
+import SettingsPage from "./pages/SettingsPage.vue"
+import { useExpenses, type Expense } from "./composables/useExpenses"
+import { useAuth } from "./composables/useAuth"
 
-const { addExpense, updateExpense, deleteExpense, getExpense } = useExpenses()
+const { addExpense, updateExpense, deleteExpense, fetchExpenses } = useExpenses()
+const { isAuthenticated, loading: authLoading } = useAuth()
 
 // Navigation state
 const activeTab = ref('home')
@@ -89,33 +90,17 @@ const expenseDialogOpen = ref(false)
 const expenseDetailOpen = ref(false)
 
 // Expense being edited (null = create mode)
-const expenseToEdit = ref(null)
+const expenseToEdit = ref<Expense | null>(null)
 
 // Selected expense for detail view
-const selectedExpense = ref(null)
+const selectedExpense = ref<Expense | null>(null)
 
-/*
-  ============================================================
-  ACTION SHEET LOGIC - Commented out for future use
-  ============================================================
-
-  const sheetOpen = ref(false)
-
-  function handleSheetAction(actionId) {
-    console.log('Selected action:', actionId)
-    switch (actionId) {
-      case 'expense':
-        openCreateExpense()
-        break
-      case 'income':
-        // TODO: Open income dialog
-        break
-      case 'transfer':
-        // TODO: Open transfer dialog
-        break
-    }
+// Fetch expenses when authenticated
+onMounted(() => {
+  if (isAuthenticated.value) {
+    fetchExpenses()
   }
-*/
+})
 
 // ============================================================
 // CREATE EXPENSE
@@ -128,7 +113,7 @@ function openCreateExpense() {
 // ============================================================
 // VIEW EXPENSE DETAIL
 // ============================================================
-function openExpenseDetail(expense) {
+function openExpenseDetail(expense: Expense) {
   selectedExpense.value = expense
   expenseDetailOpen.value = true
 }
@@ -136,7 +121,8 @@ function openExpenseDetail(expense) {
 // ============================================================
 // EDIT EXPENSE
 // ============================================================
-function openEditExpense(expense) {
+function openEditExpense(expense: Expense) {
+  expenseDetailOpen.value = false
   expenseToEdit.value = expense
   expenseDialogOpen.value = true
 }
@@ -149,20 +135,27 @@ function closeExpenseDialog() {
 // ============================================================
 // SAVE EXPENSE (Create or Update)
 // ============================================================
-function handleSaveExpense(data) {
-  if (expenseToEdit.value) {
-    // Update existing expense
-    updateExpense(expenseToEdit.value.id, data)
-  } else {
-    // Create new expense
-    addExpense(data)
+async function handleSaveExpense(data: { description: string; date: string; amount: number; category: string }) {
+  try {
+    if (expenseToEdit.value) {
+      await updateExpense(expenseToEdit.value.id, data)
+    } else {
+      await addExpense(data)
+    }
+    closeExpenseDialog()
+  } catch (e) {
+    console.error('Failed to save expense:', e)
   }
 }
 
 // ============================================================
 // DELETE EXPENSE
 // ============================================================
-function handleDeleteExpense(expenseId) {
-  deleteExpense(expenseId)
+async function handleDeleteExpense(expenseId: string) {
+  try {
+    await deleteExpense(expenseId)
+  } catch (e) {
+    console.error('Failed to delete expense:', e)
+  }
 }
 </script>
