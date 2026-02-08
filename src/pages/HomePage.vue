@@ -1,7 +1,7 @@
 <template>
-  <div class="px-4 py-6">
+  <div class="px-4 pt-1 pb-3">
     <!-- Balance Hero -->
-    <div class="text-center mb-8">
+    <div class="text-center mb-4">
       <p class="text-4xl font-bold text-white mb-1">
         €{{ totalExpenses.toLocaleString('it-IT', { minimumFractionDigits: 2 }) }}
       </p>

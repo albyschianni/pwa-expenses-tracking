@@ -18,20 +18,41 @@
     <!-- HEADER -->
     <AppHeader @open-month-picker="monthPickerOpen = true" />
 
-    <!-- MAIN CONTENT -->
-    <main class="pt-14 pb-20 overflow-y-auto">
-      <HomePage
-        v-if="activeTab === 'home'"
-        @expense-click="openExpenseDetail"
-      />
-      <GraphicsPage v-else-if="activeTab === 'graphic'" />
+    <!-- MAIN CONTENT - Each tab has its own scroll container -->
+    <div
+      v-show="activeTab === 'home'"
+      ref="homeScrollRef"
+      class="fixed inset-0 top-16 bottom-16 overflow-y-auto bg-gray-900"
+    >
+      <HomePage @expense-click="openExpenseDetail" />
+    </div>
+
+    <div
+      v-show="activeTab === 'graphic'"
+      ref="graphicScrollRef"
+      class="fixed inset-0 top-16 bottom-16 overflow-y-auto bg-gray-900"
+    >
+      <GraphicsPage />
+    </div>
+
+    <div
+      v-show="activeTab === 'recurring'"
+      ref="recurringScrollRef"
+      class="fixed inset-0 top-16 bottom-16 overflow-y-auto bg-gray-900"
+    >
       <RecurringPage
-        v-else-if="activeTab === 'recurring'"
         @add-recurring="openCreateRecurring"
         @edit-recurring="openEditRecurring"
       />
-      <SettingsPage v-else-if="activeTab === 'settings'" />
-    </main>
+    </div>
+
+    <div
+      v-show="activeTab === 'settings'"
+      ref="settingsScrollRef"
+      class="fixed inset-0 top-16 bottom-16 overflow-y-auto bg-gray-900"
+    >
+      <SettingsPage />
+    </div>
 
     <!-- TAB BAR (includes centered FAB) -->
     <TabBar
@@ -103,6 +124,26 @@ const {
 
 // Navigation state
 const activeTab = ref('home')
+
+// Scroll refs for each tab
+const homeScrollRef = ref<HTMLElement | null>(null)
+const graphicScrollRef = ref<HTMLElement | null>(null)
+const recurringScrollRef = ref<HTMLElement | null>(null)
+const settingsScrollRef = ref<HTMLElement | null>(null)
+
+// Reset scroll to top when switching tabs
+watch(activeTab, () => {
+  const scrollRefs: Record<string, typeof homeScrollRef> = {
+    home: homeScrollRef,
+    graphic: graphicScrollRef,
+    recurring: recurringScrollRef,
+    settings: settingsScrollRef,
+  }
+  const ref = scrollRefs[activeTab.value]
+  if (ref?.value) {
+    ref.value.scrollTop = 0
+  }
+})
 
 // Dialog states
 const monthPickerOpen = ref(false)
