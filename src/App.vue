@@ -25,9 +25,11 @@
         @expense-click="openExpenseDetail"
       />
       <GraphicsPage v-else-if="activeTab === 'graphic'" />
-      <div v-else-if="activeTab === 'todo'" class="p-4 text-gray-400 text-center">
-        <p class="text-lg">TODO page coming soon</p>
-      </div>
+      <RecurringPage
+        v-else-if="activeTab === 'recurring'"
+        @add-recurring="openCreateRecurring"
+        @edit-recurring="openEditRecurring"
+      />
       <SettingsPage v-else-if="activeTab === 'settings'" />
     </main>
 
@@ -60,25 +62,44 @@
       @edit="openEditExpense"
       @delete="handleDeleteExpense"
     />
+
+    <!-- RECURRING EXPENSE DIALOG (Create / Edit) -->
+    <RecurringExpenseDialog
+      :open="recurringDialogOpen"
+      :recurring-expense="recurringToEdit"
+      @close="closeRecurringDialog"
+      @save="handleSaveRecurring"
+      @delete="handleDeleteRecurring"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import AppHeader from "./components/AppHeader.vue"
 import TabBar from "./components/TabBar.vue"
 import MonthPicker from "./components/MonthPicker.vue"
 import ExpenseDialog from "./components/ExpenseDialog.vue"
 import ExpenseDetailDialog from "./components/ExpenseDetailDialog.vue"
+import RecurringExpenseDialog from "./components/RecurringExpenseDialog.vue"
 import HomePage from "./pages/HomePage.vue"
 import GraphicsPage from "./pages/GraphicsPage.vue"
 import AuthPage from "./pages/AuthPage.vue"
 import SettingsPage from "./pages/SettingsPage.vue"
+import RecurringPage from "./pages/RecurringPage.vue"
 import { useExpenses, type Expense } from "./composables/useExpenses"
 import { useAuth } from "./composables/useAuth"
+import { useRecurringExpenses, type RecurringExpense } from "./composables/useRecurringExpenses"
 
 const { addExpense, updateExpense, deleteExpense, fetchExpenses } = useExpenses()
 const { isAuthenticated, loading: authLoading } = useAuth()
+const {
+  addRecurringExpense,
+  updateRecurringExpense,
+  deleteRecurringExpense,
+  fetchRecurringExpenses,
+  processAutoGeneration
+} = useRecurringExpenses()
 
 // Navigation state
 const activeTab = ref('home')
@@ -87,6 +108,7 @@ const activeTab = ref('home')
 const monthPickerOpen = ref(false)
 const expenseDialogOpen = ref(false)
 const expenseDetailOpen = ref(false)
+const recurringDialogOpen = ref(false)
 
 // Expense being edited (null = create mode)
 const expenseToEdit = ref<Expense | null>(null)
@@ -94,12 +116,17 @@ const expenseToEdit = ref<Expense | null>(null)
 // Selected expense for detail view
 const selectedExpense = ref<Expense | null>(null)
 
-// Fetch expenses when authenticated
-onMounted(() => {
-  if (isAuthenticated.value) {
-    fetchExpenses()
+// Recurring expense being edited (null = create mode)
+const recurringToEdit = ref<RecurringExpense | null>(null)
+
+// Fetch expenses and recurring expenses when authenticated
+watch(isAuthenticated, async (authenticated) => {
+  if (authenticated) {
+    await fetchExpenses()
+    await fetchRecurringExpenses()
+    await processAutoGeneration()
   }
-})
+}, { immediate: true })
 
 // ============================================================
 // CREATE EXPENSE
@@ -155,6 +182,46 @@ async function handleDeleteExpense(expenseId: string) {
     await deleteExpense(expenseId)
   } catch (e) {
     console.error('Failed to delete expense:', e)
+  }
+}
+
+// ============================================================
+// RECURRING EXPENSES
+// ============================================================
+function openCreateRecurring() {
+  recurringToEdit.value = null
+  recurringDialogOpen.value = true
+}
+
+function openEditRecurring(item: RecurringExpense) {
+  recurringToEdit.value = item
+  recurringDialogOpen.value = true
+}
+
+function closeRecurringDialog() {
+  recurringDialogOpen.value = false
+  recurringToEdit.value = null
+}
+
+async function handleSaveRecurring(data: { description: string; amount: number; category: string; dayOfMonth: number }) {
+  try {
+    if (recurringToEdit.value) {
+      await updateRecurringExpense(recurringToEdit.value.id, data)
+    } else {
+      await addRecurringExpense(data)
+    }
+    closeRecurringDialog()
+  } catch (e) {
+    console.error('Failed to save recurring expense:', e)
+  }
+}
+
+async function handleDeleteRecurring(id: string) {
+  try {
+    await deleteRecurringExpense(id)
+    closeRecurringDialog()
+  } catch (e) {
+    console.error('Failed to delete recurring expense:', e)
   }
 }
 </script>

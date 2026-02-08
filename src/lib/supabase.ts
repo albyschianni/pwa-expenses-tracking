@@ -25,3 +25,16 @@ export interface DbCategory {
   user_id: string | null
   is_default: boolean
 }
+
+export interface DbRecurringExpense {
+  id: string
+  user_id: string
+  description: string
+  amount: number
+  category_id: string
+  day_of_month: number
+  enabled: boolean
+  last_generated_date: string | null
+  created_at: string
+  updated_at: string
+}
