@@ -24,9 +24,7 @@
         v-if="activeTab === 'home'"
         @expense-click="openExpenseDetail"
       />
-      <div v-else-if="activeTab === 'graphic'" class="p-4 text-gray-400 text-center">
-        <p class="text-lg">Graphics page coming soon</p>
-      </div>
+      <GraphicsPage v-else-if="activeTab === 'graphic'" />
       <div v-else-if="activeTab === 'todo'" class="p-4 text-gray-400 text-center">
         <p class="text-lg">TODO page coming soon</p>
       </div>
@@ -73,6 +71,7 @@ import MonthPicker from "./components/MonthPicker.vue"
 import ExpenseDialog from "./components/ExpenseDialog.vue"
 import ExpenseDetailDialog from "./components/ExpenseDetailDialog.vue"
 import HomePage from "./pages/HomePage.vue"
+import GraphicsPage from "./pages/GraphicsPage.vue"
 import AuthPage from "./pages/AuthPage.vue"
 import SettingsPage from "./pages/SettingsPage.vue"
 import { useExpenses, type Expense } from "./composables/useExpenses"

@@ -33,59 +33,82 @@ const expenses = ref<Expense[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-// Track if we've fetched for current month
-let lastFetchedMonth: string | null = null
+// Track current month for the loaded data
+let currentLoadedMonth: string | null = null
+
+// Prevent duplicate watchers
+let watchersInitialized = false
+
+// Default category fallback
+const defaultCategory = { id: 'other', label: 'Other', icon: '📦', color: '#6B7280' }
+
+// Get category config by id
+function getCategoryConfig(categoryId: string) {
+  const found = CATEGORIES.find(c => c.id === categoryId)
+  return found ?? defaultCategory
+}
+
+// Transform DB expense to frontend expense
+function transformExpense(dbExpense: DbExpense): Expense {
+  const category = getCategoryConfig(dbExpense.category_id)
+  return {
+    id: dbExpense.id,
+    description: dbExpense.description,
+    date: dbExpense.date,
+    amount: Number(dbExpense.amount),
+    category: dbExpense.category_id,
+    icon: category.icon as string,
+    color: category.color as string,
+  }
+}
+
+// Helper to get month key from a date string (YYYY-MM-DD -> YYYY-MM)
+function getMonthFromDate(dateStr: string): string {
+  return dateStr.substring(0, 7)
+}
+
+// Get month range for queries
+function getMonthRange(monthKey: string): { startDate: string; endDate: string } {
+  const parts = monthKey.split('-').map(Number)
+  const year = parts[0] ?? new Date().getFullYear()
+  const month = parts[1] ?? (new Date().getMonth() + 1)
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  // Get last day of month: month is 1-indexed here, so new Date(year, month, 0) gives last day
+  const lastDay = new Date(year, month, 0)
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
+  return { startDate, endDate }
+}
 
 export function useExpenses() {
   const { user, isAuthenticated } = useAuth()
   const { monthKey } = useSelectedMonth()
 
-  // Default category fallback
-  const defaultCategory = { id: 'other', label: 'Other', icon: '📦', color: '#6B7280' }
-
-  // Get category config by id
-  function getCategoryConfig(categoryId: string) {
-    const found = CATEGORIES.find(c => c.id === categoryId)
-    return found ?? defaultCategory
-  }
-
-  // Transform DB expense to frontend expense
-  function transformExpense(dbExpense: DbExpense): Expense {
-    const category = getCategoryConfig(dbExpense.category_id)
-    return {
-      id: dbExpense.id,
-      description: dbExpense.description,
-      date: dbExpense.date,
-      amount: Number(dbExpense.amount),
-      category: dbExpense.category_id,
-      icon: category.icon as string,
-      color: category.color as string,
-    }
-  }
-
   // Fetch expenses for the selected month
-  async function fetchExpenses() {
+  async function fetchExpenses(forceRefresh = false) {
     if (!isAuthenticated.value || !user.value) {
       expenses.value = []
+      currentLoadedMonth = null
       return
     }
 
-    // Get month range
-    const parts = monthKey.value.split('-').map(Number)
-    const year = parts[0] ?? new Date().getFullYear()
-    const month = parts[1] ?? (new Date().getMonth() + 1)
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0] // Last day of month
+    const targetMonth = monthKey.value
 
-    // Skip if already fetched this month
-    if (lastFetchedMonth === monthKey.value && expenses.value.length > 0) {
+    // Skip if already loaded this month (unless forced)
+    if (!forceRefresh && currentLoadedMonth === targetMonth) {
       return
+    }
+
+    // Clear expenses immediately when switching months
+    if (currentLoadedMonth !== targetMonth) {
+      expenses.value = []
     }
 
     loading.value = true
     error.value = null
 
     try {
+      const { startDate, endDate } = getMonthRange(targetMonth)
+
       const { data, error: fetchError } = await supabase
         .from('expenses')
         .select('*')
@@ -95,8 +118,11 @@ export function useExpenses() {
 
       if (fetchError) throw fetchError
 
-      expenses.value = (data || []).map(transformExpense)
-      lastFetchedMonth = monthKey.value
+      // Only update if we're still on the same month (user didn't switch during fetch)
+      if (monthKey.value === targetMonth) {
+        expenses.value = (data || []).map(transformExpense)
+        currentLoadedMonth = targetMonth
+      }
     } catch (e: any) {
       error.value = e.message || 'Failed to fetch expenses'
       console.error('Fetch expenses error:', e)
@@ -105,21 +131,28 @@ export function useExpenses() {
     }
   }
 
-  // Watch for month changes and refetch
-  watch(monthKey, () => {
-    lastFetchedMonth = null
-    fetchExpenses()
-  })
+  // Initialize watchers only once (singleton pattern)
+  if (!watchersInitialized) {
+    watchersInitialized = true
 
-  // Watch for auth changes
-  watch(isAuthenticated, (authenticated) => {
-    if (authenticated) {
-      lastFetchedMonth = null
-      fetchExpenses()
-    } else {
-      expenses.value = []
-    }
-  })
+    // Watch for month changes and refetch
+    watch(monthKey, (newMonth, oldMonth) => {
+      if (newMonth !== oldMonth) {
+        fetchExpenses()
+      }
+    })
+
+    // Watch for auth changes
+    watch(isAuthenticated, (authenticated) => {
+      if (authenticated) {
+        currentLoadedMonth = null
+        fetchExpenses()
+      } else {
+        expenses.value = []
+        currentLoadedMonth = null
+      }
+    })
+  }
 
   // Total expenses
   const totalExpenses = computed(() => {
@@ -171,9 +204,13 @@ export function useExpenses() {
 
       if (insertError) throw insertError
 
-      // Add to local state
       const expense = transformExpense(newExpense)
-      expenses.value.push(expense)
+
+      // Only add to local state if expense is in the currently viewed month
+      const expenseMonth = getMonthFromDate(expense.date)
+      if (expenseMonth === monthKey.value) {
+        expenses.value.push(expense)
+      }
 
       return expense
     } catch (e: any) {
@@ -192,7 +229,7 @@ export function useExpenses() {
     error.value = null
 
     try {
-      const updateData: any = {}
+      const updateData: Record<string, unknown> = {}
       if (data.description !== undefined) updateData.description = data.description
       if (data.date !== undefined) updateData.date = data.date
       if (data.amount !== undefined) updateData.amount = data.amount
@@ -208,10 +245,22 @@ export function useExpenses() {
 
       if (updateError) throw updateError
 
-      // Update local state
-      const index = expenses.value.findIndex(e => e.id === id)
-      if (index !== -1) {
-        expenses.value[index] = transformExpense(updatedExpense)
+      const expense = transformExpense(updatedExpense)
+      const expenseMonth = getMonthFromDate(expense.date)
+
+      // Check if expense still belongs in current month view
+      if (expenseMonth === monthKey.value) {
+        // Update in local state
+        const index = expenses.value.findIndex(e => e.id === id)
+        if (index !== -1) {
+          expenses.value[index] = expense
+        } else {
+          // Date changed TO current month - add it
+          expenses.value.push(expense)
+        }
+      } else {
+        // Date changed AWAY from current month - remove it
+        expenses.value = expenses.value.filter(e => e.id !== id)
       }
 
       return true
@@ -255,10 +304,9 @@ export function useExpenses() {
     return expenses.value.find(e => e.id === id)
   }
 
-  // Force refresh
+  // Force refresh current month
   function refresh() {
-    lastFetchedMonth = null
-    return fetchExpenses()
+    return fetchExpenses(true)
   }
 
   return {
