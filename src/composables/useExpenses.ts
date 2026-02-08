@@ -41,11 +41,12 @@ export function useExpenses() {
   const { monthKey } = useSelectedMonth()
 
   // Default category fallback
-  const defaultCategory = CATEGORIES[CATEGORIES.length - 1]
+  const defaultCategory = { id: 'other', label: 'Other', icon: '📦', color: '#6B7280' }
 
   // Get category config by id
   function getCategoryConfig(categoryId: string) {
-    return CATEGORIES.find(c => c.id === categoryId) ?? defaultCategory
+    const found = CATEGORIES.find(c => c.id === categoryId)
+    return found ?? defaultCategory
   }
 
   // Transform DB expense to frontend expense
@@ -57,8 +58,8 @@ export function useExpenses() {
       date: dbExpense.date,
       amount: Number(dbExpense.amount),
       category: dbExpense.category_id,
-      icon: category.icon,
-      color: category.color,
+      icon: category.icon as string,
+      color: category.color as string,
     }
   }
 
