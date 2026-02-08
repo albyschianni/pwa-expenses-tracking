@@ -16,7 +16,10 @@
   <!-- Main App -->
   <div v-else class="relative min-h-screen bg-gray-900">
     <!-- HEADER -->
-    <AppHeader @open-month-picker="monthPickerOpen = true" />
+    <AppHeader
+      @open-month-picker="monthPickerOpen = true"
+      @open-menu="menuOpen = true"
+    />
 
     <!-- MAIN CONTENT - Each tab has its own scroll container -->
     <div
@@ -92,6 +95,12 @@
       @save="handleSaveRecurring"
       @delete="handleDeleteRecurring"
     />
+
+    <!-- SIDE DRAWER (Menu) -->
+    <SideDrawer
+      :open="menuOpen"
+      @close="menuOpen = false"
+    />
   </div>
 </template>
 
@@ -103,6 +112,7 @@ import MonthPicker from "./components/MonthPicker.vue"
 import ExpenseDialog from "./components/ExpenseDialog.vue"
 import ExpenseDetailDialog from "./components/ExpenseDetailDialog.vue"
 import RecurringExpenseDialog from "./components/RecurringExpenseDialog.vue"
+import SideDrawer from "./components/SideDrawer.vue"
 import HomePage from "./pages/HomePage.vue"
 import GraphicsPage from "./pages/GraphicsPage.vue"
 import AuthPage from "./pages/AuthPage.vue"
@@ -150,6 +160,7 @@ const monthPickerOpen = ref(false)
 const expenseDialogOpen = ref(false)
 const expenseDetailOpen = ref(false)
 const recurringDialogOpen = ref(false)
+const menuOpen = ref(false)
 
 // Expense being edited (null = create mode)
 const expenseToEdit = ref<Expense | null>(null)

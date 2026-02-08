@@ -5,7 +5,7 @@
     <img
       src="https://i.pravatar.cc/100"
       alt="profile"
-      class="w-11 h-11 rounded-full border-2 border-teal-400 ml-1 mt-1"
+      class="w-11 h-11 rounded-full border-2 ml-1 mt-1"
     />
 
     <!-- Center: month selector -->
@@ -20,7 +20,10 @@
     </button>
 
     <!-- Right: hamburger menu -->
-    <button class="w-10 h-10 flex items-center justify-center text-gray-400">
+    <button
+      @click="$emit('open-menu')"
+      class="w-10 h-10 flex items-center justify-center text-gray-400 active:text-white transition-colors"
+    >
       <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
       </svg>
@@ -32,7 +35,7 @@
 <script setup>
 import { useSelectedMonth } from '../composables/useSelectedMonth'
 
-defineEmits(['open-month-picker'])
+defineEmits(['open-month-picker', 'open-menu'])
 
 const { displayMonthYear } = useSelectedMonth()
 </script>
