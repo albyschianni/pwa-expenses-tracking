@@ -6,8 +6,8 @@ const selectedMonth = ref(new Date().getMonth()) // 0-indexed (0 = January)
 
 export function useSelectedMonth() {
   const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
   ]
 
   const displayMonth = computed(() => monthNames[selectedMonth.value])
