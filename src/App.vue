@@ -19,6 +19,7 @@
     <AppHeader
       @open-month-picker="monthPickerOpen = true"
       @open-menu="menuOpen = true"
+      @open-avatar="avatarViewerOpen = true"
     />
 
     <!-- MAIN CONTENT - Each tab has its own scroll container -->
@@ -101,6 +102,12 @@
       :open="menuOpen"
       @close="menuOpen = false"
     />
+
+    <!-- AVATAR VIEWER -->
+    <AvatarViewer
+      :open="avatarViewerOpen"
+      @close="avatarViewerOpen = false"
+    />
   </div>
 </template>
 
@@ -113,6 +120,7 @@ import ExpenseDialog from "./components/ExpenseDialog.vue"
 import ExpenseDetailDialog from "./components/ExpenseDetailDialog.vue"
 import RecurringExpenseDialog from "./components/RecurringExpenseDialog.vue"
 import SideDrawer from "./components/SideDrawer.vue"
+import AvatarViewer from "./components/AvatarViewer.vue"
 import HomePage from "./pages/HomePage.vue"
 import GraphicsPage from "./pages/GraphicsPage.vue"
 import AuthPage from "./pages/AuthPage.vue"
@@ -161,6 +169,7 @@ const expenseDialogOpen = ref(false)
 const expenseDetailOpen = ref(false)
 const recurringDialogOpen = ref(false)
 const menuOpen = ref(false)
+const avatarViewerOpen = ref(false)
 
 // Expense being edited (null = create mode)
 const expenseToEdit = ref<Expense | null>(null)

@@ -1,12 +1,17 @@
 <template>
   <header class="fixed top-0 left-0 w-full h-16 px-5 pt-1 flex items-center justify-between bg-gray-900 z-50">
 
-    <!-- Left: avatar -->
-    <img
-      src="https://i.pravatar.cc/100"
-      alt="profile"
-      class="w-11 h-11 rounded-full border-2 ml-1 mt-1"
-    />
+    <!-- Left: avatar (clickable) -->
+    <button
+      @click="$emit('open-avatar')"
+      class="w-11 h-11 rounded-full border-2 border-gray-600 ml-1 mt-1 overflow-hidden active:scale-95 transition-transform focus:outline-none focus:ring-2 focus:ring-teal-500"
+    >
+      <img
+        :src="displayAvatarUrl"
+        alt="profile"
+        class="w-full h-full object-cover"
+      />
+    </button>
 
     <!-- Center: month selector -->
     <button
@@ -34,8 +39,10 @@
 
 <script setup>
 import { useSelectedMonth } from '../composables/useSelectedMonth'
+import { useAvatar } from '../composables/useAvatar'
 
-defineEmits(['open-month-picker', 'open-menu'])
+defineEmits(['open-month-picker', 'open-menu', 'open-avatar'])
 
 const { displayMonthYear } = useSelectedMonth()
+const { displayAvatarUrl } = useAvatar()
 </script>
