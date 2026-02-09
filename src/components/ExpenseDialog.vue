@@ -41,7 +41,7 @@
           <div>
             <label class="block text-gray-400 text-sm mb-2">Importo</label>
             <div class="relative">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl">€</span>
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl">{{ symbol }}</span>
               <input
                 ref="amountInput"
                 v-model="form.amount"
@@ -105,6 +105,9 @@
 <script setup>
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { CATEGORIES } from '../composables/useExpenses'
+import { useCurrency } from '../composables/useCurrency'
+
+const { symbol } = useCurrency()
 
 const props = defineProps({
   open: Boolean,

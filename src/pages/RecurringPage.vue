@@ -60,7 +60,7 @@
 
         <!-- Amount -->
         <p class="text-white font-semibold whitespace-nowrap mr-2" :class="{ 'opacity-50': !item.enabled }">
-          €{{ item.amount.toFixed(2) }}
+          {{ formatAmount(item.amount) }}
         </p>
 
         <!-- Enable/Disable Toggle -->
@@ -93,6 +93,7 @@
 
 <script setup lang="ts">
 import { useRecurringExpenses, type RecurringExpense } from '../composables/useRecurringExpenses'
+import { useCurrency } from '../composables/useCurrency'
 
 defineEmits<{
   (e: 'add-recurring'): void
@@ -100,6 +101,7 @@ defineEmits<{
 }>()
 
 const { recurringExpenses, toggleEnabled } = useRecurringExpenses()
+const { formatAmount } = useCurrency()
 
 async function handleToggle(id: string) {
   try {

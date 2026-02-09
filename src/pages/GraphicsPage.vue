@@ -86,12 +86,16 @@ import {
   Tooltip,
 } from 'chart.js'
 import { useExpenses } from '../composables/useExpenses'
+import { useCurrency } from '../composables/useCurrency'
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip)
 
 // Get expenses data
 const { expenses, totalExpenses, getCategoryConfig } = useExpenses()
+
+// Currency formatting
+const { formatAmount } = useCurrency()
 
 // Average expense
 const averageExpense = computed(() => {
@@ -121,10 +125,8 @@ function getPercentage(amount: number): number {
   return Math.round((amount / totalExpenses.value) * 100)
 }
 
-// Format currency
-function formatCurrency(amount: number): string {
-  return '€' + amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
+// Format currency - use composable
+const formatCurrency = (amount: number) => formatAmount(amount)
 
 // Doughnut chart data
 const doughnutData = computed(() => ({
@@ -159,7 +161,7 @@ const doughnutOptions = {
           const value = context.raw
           const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
           const percentage = Math.round((value / total) * 100)
-          return `€${value.toFixed(2)} (${percentage}%)`
+          return `${formatAmount(value)} (${percentage}%)`
         }
       }
     }

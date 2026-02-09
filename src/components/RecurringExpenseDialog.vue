@@ -41,7 +41,7 @@
           <div>
             <label class="block text-gray-400 text-sm mb-2">Importo</label>
             <div class="relative">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl">€</span>
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl">{{ symbol }}</span>
               <input
                 ref="amountInput"
                 v-model="form.amount"
@@ -126,6 +126,7 @@
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { CATEGORIES } from '../composables/useExpenses'
 import type { RecurringExpense } from '../composables/useRecurringExpenses'
+import { useCurrency } from '../composables/useCurrency'
 
 const props = defineProps<{
   open: boolean
@@ -137,6 +138,8 @@ const emit = defineEmits<{
   (e: 'save', data: { description: string; amount: number; category: string; dayOfMonth: number }): void
   (e: 'delete', id: string): void
 }>()
+
+const { symbol } = useCurrency()
 
 const amountInput = ref<HTMLInputElement | null>(null)
 

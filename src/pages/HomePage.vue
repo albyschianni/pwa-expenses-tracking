@@ -3,7 +3,7 @@
     <!-- Balance Hero -->
     <div class="text-center mb-4">
       <p class="text-4xl font-bold text-white mb-1">
-        €{{ totalExpenses.toLocaleString('it-IT', { minimumFractionDigits: 2 }) }}
+        {{ formatAmount(totalExpenses) }}
       </p>
       <p class="text-gray-400 text-sm">Spese totali di {{ displayMonth }}</p>
     </div>
@@ -46,7 +46,7 @@
 
         <!-- Amount -->
         <p class="text-white font-semibold whitespace-nowrap">
-          -€{{ expense.amount.toFixed(2) }}
+          -{{ formatAmount(expense.amount) }}
         </p>
       </button>
     </div>
@@ -56,6 +56,7 @@
 <script setup>
 import { useSelectedMonth } from '../composables/useSelectedMonth'
 import { useExpenses } from '../composables/useExpenses'
+import { useCurrency } from '../composables/useCurrency'
 
 defineEmits(['expense-click'])
 
@@ -64,4 +65,7 @@ const { displayMonth } = useSelectedMonth()
 
 // Access shared expenses state
 const { sortedExpenses, totalExpenses, formatDate } = useExpenses()
+
+// Currency formatting
+const { formatAmount } = useCurrency()
 </script>

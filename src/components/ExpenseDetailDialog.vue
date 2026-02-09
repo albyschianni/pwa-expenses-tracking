@@ -32,7 +32,7 @@
             </div>
             <div class="flex-1">
               <p class="text-3xl font-bold text-white">
-                €{{ expense.amount.toFixed(2) }}
+                {{ formatAmount(expense.amount) }}
               </p>
               <p class="text-gray-400 text-sm">{{ categoryLabel }}</p>
             </div>
@@ -117,6 +117,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { CATEGORIES } from '../composables/useExpenses'
+import { useCurrency } from '../composables/useCurrency'
 
 const props = defineProps({
   open: Boolean,
@@ -127,6 +128,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'edit', 'delete'])
+
+const { formatAmount } = useCurrency()
 
 const showDeleteConfirm = ref(false)
 
