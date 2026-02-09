@@ -34,6 +34,7 @@ initAuth()
 
 export function useAuth() {
   const isAuthenticated = computed(() => !!user.value)
+  const displayName = computed(() => user.value?.user_metadata?.display_name || '')
 
   async function signUp(email: string, password: string) {
     error.value = null
@@ -131,6 +132,50 @@ export function useAuth() {
     // Note: loading stays true as we're redirecting to Google
   }
 
+  async function updateProfile(data: { displayName?: string; email?: string }) {
+    error.value = null
+    loading.value = true
+
+    try {
+      const updateData: any = {}
+
+      if (data.displayName !== undefined) {
+        updateData.data = { display_name: data.displayName }
+      }
+
+      if (data.email) {
+        updateData.email = data.email
+      }
+
+      const { data: result, error: authError } = await supabase.auth.updateUser(updateData)
+      if (authError) throw authError
+
+      user.value = result.user
+    } catch (e: any) {
+      error.value = e.message || 'Update failed'
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function updatePassword(newPassword: string) {
+    error.value = null
+    loading.value = true
+
+    try {
+      const { error: authError } = await supabase.auth.updateUser({
+        password: newPassword,
+      })
+      if (authError) throw authError
+    } catch (e: any) {
+      error.value = e.message || 'Password update failed'
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   function clearError() {
     error.value = null
   }
@@ -141,11 +186,14 @@ export function useAuth() {
     loading,
     error,
     isAuthenticated,
+    displayName,
     signUp,
     signIn,
     signInWithGoogle,
     signOut,
     resetPassword,
+    updateProfile,
+    updatePassword,
     clearError,
   }
 }

@@ -1,35 +1,31 @@
 <template>
   <div class="px-4 py-6">
-    <!-- Profile Section -->
-    <div class="bg-gray-800 rounded-2xl p-4 mb-4">
+    <!-- Profile Card (clickable) -->
+    <button
+      @click="profileSheetOpen = true"
+      class="w-full bg-gray-800 rounded-2xl p-4 mb-4 active:bg-gray-750 transition-colors text-left"
+    >
       <div class="flex items-center gap-4">
-        <div class="w-14 h-14 rounded-full bg-teal-400 flex items-center justify-center text-gray-900 text-xl font-bold">
-          {{ userInitial }}
-        </div>
+        <img
+          :src="displayAvatarUrl"
+          alt="avatar"
+          class="w-16 h-16 rounded-full object-cover border-2 border-gray-600"
+        />
         <div class="flex-1 min-w-0">
-          <p class="text-white font-medium truncate">{{ userEmail }}</p>
-          <p class="text-gray-400 text-sm">Account attivo</p>
+          <p class="text-white font-semibold text-lg truncate">
+            {{ userName }}
+          </p>
+          <p class="text-gray-400 text-sm truncate">{{ userEmail }}</p>
+          <p class="text-teal-400 text-xs mt-1">Modifica profilo</p>
         </div>
+        <svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
       </div>
-    </div>
+    </button>
 
     <!-- Settings List -->
     <div class="bg-gray-800 rounded-2xl overflow-hidden mb-4">
-      <button class="w-full flex items-center gap-4 p-4 text-left border-b border-gray-700 active:bg-gray-700 transition-colors">
-        <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
-          <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-        </div>
-        <div class="flex-1">
-          <p class="text-white font-medium">Profilo</p>
-          <p class="text-gray-400 text-sm">Gestisci il tuo account</p>
-        </div>
-        <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-
       <button class="w-full flex items-center gap-4 p-4 text-left border-b border-gray-700 active:bg-gray-700 transition-colors">
         <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
           <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -125,31 +121,272 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Profile Sheet Modal -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="profileSheetOpen"
+          class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+          @click="profileSheetOpen = false"
+        />
+      </Transition>
+
+      <Transition name="slide-up">
+        <div
+          v-if="profileSheetOpen"
+          class="fixed inset-x-0 bottom-0 z-50 bg-gray-800 rounded-t-3xl max-h-[85vh] flex flex-col"
+        >
+          <div class="p-6 pb-0">
+            <!-- Handle + Header -->
+            <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
+            <div class="flex items-center justify-between mb-6">
+              <h3 class="text-white text-xl font-bold">Profilo</h3>
+              <button
+                @click="profileSheetOpen = false"
+                class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center"
+              >
+                <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-y-auto px-6 pb-8">
+            <!-- Avatar -->
+            <div class="flex flex-col items-center mb-8">
+              <button
+                @click="triggerAvatarUpload"
+                class="relative group"
+              >
+                <img
+                  :src="displayAvatarUrl"
+                  alt="avatar"
+                  class="w-24 h-24 rounded-full object-cover border-3 border-gray-600"
+                />
+                <div class="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-active:opacity-100 transition-opacity">
+                  <svg class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+              </button>
+              <input
+                ref="avatarFileInput"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                class="hidden"
+                @change="handleAvatarChange"
+              />
+              <p class="text-gray-400 text-xs mt-2">Tocca per cambiare foto</p>
+            </div>
+
+            <!-- Display Name -->
+            <div class="mb-5">
+              <label class="block text-gray-400 text-sm mb-2">Nome</label>
+              <input
+                v-model="profileForm.displayName"
+                type="text"
+                placeholder="Il tuo nome"
+                @blur="saveDisplayName"
+                class="w-full bg-gray-700 text-white rounded-xl py-3 px-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
+              />
+            </div>
+
+            <!-- Email (read-only) -->
+            <div class="mb-5">
+              <label class="block text-gray-400 text-sm mb-2">Email</label>
+              <div class="w-full bg-gray-700/50 text-gray-300 rounded-xl py-3 px-4">
+                {{ userEmail }}
+              </div>
+            </div>
+
+            <!-- Password Section -->
+            <div class="mb-5">
+              <label class="block text-gray-400 text-sm mb-2">Password</label>
+              <div v-if="!passwordEditMode" class="flex gap-2">
+                <div class="flex-1 bg-gray-700/50 text-gray-500 rounded-xl py-3 px-4">
+                  ••••••••
+                </div>
+                <button
+                  @click="passwordEditMode = true"
+                  class="px-4 bg-gray-700 text-teal-400 rounded-xl font-medium active:bg-gray-600 transition-colors"
+                >
+                  Cambia
+                </button>
+              </div>
+
+              <div v-else class="space-y-3">
+                <input
+                  v-model="profileForm.newPassword"
+                  type="password"
+                  placeholder="Nuova password"
+                  class="w-full bg-gray-700 text-white rounded-xl py-3 px-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                />
+                <input
+                  v-model="profileForm.confirmPassword"
+                  type="password"
+                  placeholder="Conferma password"
+                  class="w-full bg-gray-700 text-white rounded-xl py-3 px-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                />
+                <div class="flex gap-2">
+                  <button
+                    @click="cancelPasswordEdit"
+                    class="flex-1 py-3 bg-gray-700 text-gray-300 rounded-xl font-medium active:bg-gray-600 transition-colors"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    @click="savePassword"
+                    :disabled="!isPasswordValid"
+                    class="flex-1 py-3 bg-teal-400 text-gray-900 rounded-xl font-semibold active:bg-teal-500 transition-colors disabled:opacity-40"
+                  >
+                    Salva
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Feedback Toast -->
+            <Transition name="fade">
+              <div
+                v-if="feedbackMessage"
+                class="rounded-xl p-3 text-center text-sm font-medium mb-4"
+                :class="feedbackType === 'success' ? 'bg-teal-500/20 text-teal-400' : 'bg-red-500/20 text-red-400'"
+              >
+                {{ feedbackMessage }}
+              </div>
+            </Transition>
+
+            <!-- Account Info -->
+            <div class="mt-4 pt-4 border-t border-gray-700">
+              <p class="text-gray-500 text-xs text-center">
+                Account creato il {{ accountCreatedDate }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, reactive, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 import { useCurrency } from '../composables/useCurrency'
+import { useAvatar } from '../composables/useAvatar'
 
-const { user, signOut, loading } = useAuth()
+const { user, signOut, loading, displayName, updateProfile, updatePassword } = useAuth()
 const { currency, availableCurrencies, setCurrency, currentCurrency } = useCurrency()
+const { displayAvatarUrl, uploadAvatar } = useAvatar()
 
 const currencyPickerOpen = ref(false)
+const profileSheetOpen = ref(false)
+const passwordEditMode = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
+const avatarFileInput = ref<HTMLInputElement | null>(null)
+
+const profileForm = reactive({
+  displayName: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+
+// Sync form when profile sheet opens
+watch(profileSheetOpen, (open) => {
+  if (open) {
+    profileForm.displayName = displayName.value || ''
+    profileForm.newPassword = ''
+    profileForm.confirmPassword = ''
+    passwordEditMode.value = false
+    feedbackMessage.value = ''
+  }
+})
+
+const userEmail = computed(() => user.value?.email || 'Utente')
+const userName = computed(() => displayName.value || userEmail.value)
+
+const isPasswordValid = computed(() => {
+  return (
+    profileForm.newPassword.length >= 6 &&
+    profileForm.newPassword === profileForm.confirmPassword
+  )
+})
+
+const accountCreatedDate = computed(() => {
+  if (!user.value?.created_at) return ''
+  return new Date(user.value.created_at).toLocaleDateString('it-IT', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+})
 
 function selectCurrency(code: 'EUR' | 'USD' | 'GBP') {
   setCurrency(code)
   currencyPickerOpen.value = false
 }
 
-const userEmail = computed(() => user.value?.email || 'Utente')
+function showFeedback(message: string, type: 'success' | 'error') {
+  feedbackMessage.value = message
+  feedbackType.value = type
+  setTimeout(() => {
+    feedbackMessage.value = ''
+  }, 3000)
+}
 
-const userInitial = computed(() => {
-  const email = user.value?.email
-  if (!email) return 'U'
-  return email.charAt(0).toUpperCase()
-})
+async function saveDisplayName() {
+  const trimmed = profileForm.displayName.trim()
+  if (trimmed === displayName.value) return
+
+  try {
+    await updateProfile({ displayName: trimmed })
+    showFeedback('Nome aggiornato', 'success')
+  } catch (e) {
+    showFeedback('Errore nell\'aggiornamento del nome', 'error')
+  }
+}
+
+function cancelPasswordEdit() {
+  passwordEditMode.value = false
+  profileForm.newPassword = ''
+  profileForm.confirmPassword = ''
+}
+
+async function savePassword() {
+  if (!isPasswordValid.value) return
+
+  try {
+    await updatePassword(profileForm.newPassword)
+    showFeedback('Password aggiornata', 'success')
+    cancelPasswordEdit()
+  } catch (e) {
+    showFeedback('Errore nell\'aggiornamento della password', 'error')
+  }
+}
+
+function triggerAvatarUpload() {
+  avatarFileInput.value?.click()
+}
+
+async function handleAvatarChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const success = await uploadAvatar(file)
+  if (success) {
+    showFeedback('Foto aggiornata', 'success')
+  } else {
+    showFeedback('Errore nel caricamento della foto', 'error')
+  }
+
+  // Reset input so same file can be selected again
+  input.value = ''
+}
 
 async function handleLogout() {
   try {
