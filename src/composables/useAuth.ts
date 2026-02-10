@@ -38,7 +38,7 @@ export function useAuth() {
 
   async function signUp(email: string, password: string) {
     error.value = null
-    loading.value = true
+    // Note: don't set global loading=true here — it unmounts AuthPage via v-if chain in App.vue
 
     try {
       const { data, error: authError } = await supabase.auth.signUp({
@@ -56,8 +56,6 @@ export function useAuth() {
     } catch (e: any) {
       error.value = e.message || 'Sign up failed'
       throw e
-    } finally {
-      loading.value = false
     }
   }
 
