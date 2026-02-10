@@ -48,8 +48,11 @@ export function useAuth() {
 
       if (authError) throw authError
 
-      // Supabase sends confirmation email by default
-      return { user: data.user, needsConfirmation: !data.session }
+      // Check if email confirmation is needed:
+      // - No session means confirmation required
+      // - User exists but email not confirmed also means confirmation required
+      const needsConfirmation = !data.session || !data.user?.confirmed_at
+      return { user: data.user, needsConfirmation }
     } catch (e: any) {
       error.value = e.message || 'Sign up failed'
       throw e

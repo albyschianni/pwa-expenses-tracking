@@ -1,5 +1,36 @@
 <template>
   <div class="min-h-screen bg-gray-900 flex flex-col justify-center px-6 py-12">
+
+    <!-- Email Confirmation Overlay -->
+    <Transition name="overlay">
+      <div
+        v-if="showConfirmation"
+        class="fixed inset-0 z-50 bg-gray-900/95 flex items-center justify-center px-6"
+        @click.self="dismissConfirmation"
+      >
+        <div class="bg-gray-800 rounded-2xl p-8 w-full max-w-sm text-center shadow-xl">
+          <!-- Mail Icon -->
+          <div class="w-16 h-16 mx-auto mb-5 rounded-full bg-teal-400/15 flex items-center justify-center">
+            <svg class="w-8 h-8 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+          </div>
+
+          <h2 class="text-xl font-bold text-white mb-2">Controlla la tua email</h2>
+          <p class="text-gray-400 text-sm leading-relaxed mb-6">
+            Ti abbiamo inviato un'email di conferma. Clicca sul link nell'email per attivare il tuo account e poi torna qui per accedere.
+          </p>
+
+          <button
+            @click="dismissConfirmation"
+            class="w-full bg-teal-400 text-gray-900 font-semibold py-3 px-4 rounded-xl active:bg-teal-500 transition-colors"
+          >
+            Ho capito
+          </button>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Logo/Brand -->
     <div class="text-center mb-8">
       <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-teal-400 flex items-center justify-center">
@@ -143,10 +174,16 @@ const password = ref('')
 const confirmPassword = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
+const showConfirmation = ref(false)
 
 function clearMessages() {
   errorMessage.value = ''
   successMessage.value = ''
+}
+
+function dismissConfirmation() {
+  showConfirmation.value = false
+  mode.value = 'login'
 }
 
 async function handleSubmit() {
@@ -164,15 +201,15 @@ async function handleSubmit() {
     } else {
       const result = await signUp(email.value, password.value)
       if (result.needsConfirmation) {
-        successMessage.value = 'Controlla la tua email per confermare la registrazione'
-        // Clear form
+        showConfirmation.value = true
         email.value = ''
         password.value = ''
         confirmPassword.value = ''
       }
     }
   } catch (e: any) {
-    errorMessage.value = translateError(e.message)
+    const msg = e?.message || e?.error_description || e?.msg || 'Qualcosa è andato storto. Riprova.'
+    errorMessage.value = translateError(msg)
   }
 }
 
@@ -209,7 +246,32 @@ function translateError(message: string): string {
     'User already registered': 'Utente già registrato',
     'Password should be at least 6 characters': 'La password deve avere almeno 6 caratteri',
     'Unable to validate email address: invalid format': 'Formato email non valido',
+    'Request rate limit reached': 'Troppi tentativi. Riprova tra qualche minuto.',
+    'email rate limit exceeded': 'Troppi tentativi. Riprova tra qualche minuto.',
   }
-  return translations[message] || message
+  if (translations[message]) return translations[message]
+  if (message.toLowerCase().includes('rate') || message.toLowerCase().includes('limit') || message.toLowerCase().includes('429'))
+    return 'Troppi tentativi. Riprova tra qualche minuto.'
+  return message
 }
 </script>
+
+<style scoped>
+.overlay-enter-active,
+.overlay-leave-active {
+  transition: opacity 0.25s ease;
+}
+.overlay-enter-active .bg-gray-800,
+.overlay-leave-active .bg-gray-800 {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+.overlay-enter-from,
+.overlay-leave-to {
+  opacity: 0;
+}
+.overlay-enter-from .bg-gray-800,
+.overlay-leave-to .bg-gray-800 {
+  transform: scale(0.95);
+  opacity: 0;
+}
+</style>
