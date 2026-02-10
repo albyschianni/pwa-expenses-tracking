@@ -1,10 +1,34 @@
 <template>
-  <nav class="fixed bottom-0 left-0 w-full h-16 bg-gray-800 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.4)]">
-    <div class="grid grid-cols-5 h-full items-center">
+  <nav class="fixed bottom-0 left-0 w-full z-50" style="height: 80px;">
+    <!-- SVG background with notch cutout -->
+    <svg
+      class="absolute inset-0 w-full h-full drop-shadow-[0_-4px_12px_rgba(0,0,0,0.4)]"
+      viewBox="0 0 400 80"
+      preserveAspectRatio="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        :d="notchPath"
+        fill="#1f2937"
+      />
+    </svg>
+
+    <!-- FAB button (centered in the notch) -->
+    <button
+      @click="$emit('fab-click')"
+      class="absolute left-1/2 -translate-x-1/2 -top-4 w-14 h-14 bg-teal-400 rounded-full flex items-center justify-center shadow-lg shadow-teal-400/30 active:scale-95 transition-transform z-10"
+    >
+      <svg class="w-7 h-7 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+      </svg>
+    </button>
+
+    <!-- Tab buttons -->
+    <div class="relative grid grid-cols-5 h-full items-start pt-3 z-10">
       <!-- Home tab -->
       <button
         @click="$emit('navigate', 'home')"
-        class="flex items-center justify-center h-full transition-colors"
+        class="flex items-center justify-center py-2 transition-colors"
         :class="activeTab === 'home' ? 'text-teal-400' : 'text-gray-400'"
       >
         <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -15,7 +39,7 @@
       <!-- Graphic tab -->
       <button
         @click="$emit('navigate', 'graphic')"
-        class="flex items-center justify-center h-full transition-colors"
+        class="flex items-center justify-center py-2 transition-colors"
         :class="activeTab === 'graphic' ? 'text-teal-400' : 'text-gray-400'"
       >
         <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -24,22 +48,13 @@
         </svg>
       </button>
 
-      <!-- Center FAB with spacer -->
-      <div class="relative flex items-center justify-center">
-        <button
-          @click="$emit('fab-click')"
-          class="absolute -top-10 w-14 h-14 bg-teal-400 rounded-full flex items-center justify-center shadow-lg shadow-teal-400/30 active:scale-95 transition-transform"
-        >
-          <svg class="w-7 h-7 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-      </div>
+      <!-- Center spacer (FAB is absolutely positioned above) -->
+      <div />
 
       <!-- Recurring tab -->
       <button
         @click="$emit('navigate', 'recurring')"
-        class="flex items-center justify-center h-full transition-colors"
+        class="flex items-center justify-center py-2 transition-colors"
         :class="activeTab === 'recurring' ? 'text-teal-400' : 'text-gray-400'"
       >
         <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -50,7 +65,7 @@
       <!-- Settings tab -->
       <button
         @click="$emit('navigate', 'settings')"
-        class="flex items-center justify-center h-full transition-colors"
+        class="flex items-center justify-center py-2 transition-colors"
         :class="activeTab === 'settings' ? 'text-teal-400' : 'text-gray-400'"
       >
         <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -63,6 +78,8 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 defineProps({
   activeTab: {
     type: String,
@@ -71,4 +88,26 @@ defineProps({
 })
 
 defineEmits(['fab-click', 'navigate'])
+
+// SVG path for the tab bar with a circular notch cutout in the center
+// viewBox is 400x80. Width (r) and depth (d) are independent for fine-tuning.
+const notchPath = computed(() => {
+  const w = 400
+  const h = 80
+  const cx = w / 2        // center x
+  const r = 40            // horizontal radius
+  const d = 50            // depth of the notch (deeper)
+  const curveW = 12       // width of the smooth curve transition
+
+  return `
+    M 0,0
+    L ${cx - r - curveW},0
+    C ${cx - r},0 ${cx - r},${d} ${cx},${d}
+    C ${cx + r},${d} ${cx + r},0 ${cx + r + curveW},0
+    L ${w},0
+    L ${w},${h}
+    L 0,${h}
+    Z
+  `
+})
 </script>

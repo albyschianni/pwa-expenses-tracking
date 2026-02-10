@@ -1,5 +1,16 @@
 <template>
   <div class="px-4 py-6">
+    <!-- WIP Toast -->
+    <Transition name="fade">
+      <div
+        v-if="showCategoryWip"
+        class="bg-teal-500/15 border border-teal-500/30 rounded-xl p-3 mb-4 text-center"
+      >
+        <p class="text-teal-400 text-sm font-medium">Funzionalit&agrave; in arrivo!</p>
+        <p class="text-gray-400 text-xs mt-1">Se hai categorie da suggerire, faccelo sapere.</p>
+      </div>
+    </Transition>
+
     <!-- Profile Card (clickable) -->
     <button
       @click="profileSheetOpen = true"
@@ -26,7 +37,7 @@
 
     <!-- Settings List -->
     <div class="bg-gray-800 rounded-2xl overflow-hidden mb-4">
-      <button class="w-full flex items-center gap-4 p-4 text-left border-b border-gray-700 active:bg-gray-700 transition-colors">
+      <button @click="handleCategoryWip" class="w-full flex items-center gap-4 p-4 text-left border-b border-gray-700 active:bg-gray-700 transition-colors">
         <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
           <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -282,6 +293,8 @@ const { user, signOut, loading, displayName, updateProfile, updatePassword } = u
 const { currency, availableCurrencies, setCurrency, currentCurrency } = useCurrency()
 const { displayAvatarUrl, uploadAvatar } = useAvatar()
 
+const showCategoryWip = ref(false)
+let categoryWipTimer: ReturnType<typeof setTimeout> | null = null
 const currencyPickerOpen = ref(false)
 const profileSheetOpen = ref(false)
 const passwordEditMode = ref(false)
@@ -324,6 +337,14 @@ const accountCreatedDate = computed(() => {
     year: 'numeric',
   })
 })
+
+function handleCategoryWip() {
+  if (categoryWipTimer) clearTimeout(categoryWipTimer)
+  showCategoryWip.value = true
+  categoryWipTimer = setTimeout(() => {
+    showCategoryWip.value = false
+  }, 3000)
+}
 
 function selectCurrency(code: 'EUR' | 'USD' | 'GBP') {
   setCurrency(code)

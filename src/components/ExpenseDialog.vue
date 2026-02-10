@@ -13,7 +13,8 @@
     <Transition name="slide-up">
       <div
         v-if="open"
-        class="fixed inset-x-4 top-20 bottom-24 bg-gray-800 rounded-2xl z-50 flex flex-col overflow-hidden"
+        class="fixed inset-x-4 top-20 bottom-24 bg-gray-800 rounded-2xl z-50 flex flex-col overflow-hidden overflow-x-hidden"
+        style="overscroll-behavior: contain; touch-action: pan-y;"
       >
         <!-- Header -->
         <div class="flex items-center justify-between px-4 py-4 border-b border-gray-700">
@@ -36,7 +37,7 @@
         </div>
 
         <!-- Form -->
-        <div class="flex-1 overflow-y-auto p-4 space-y-6">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6" style="overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y;">
           <!-- Amount -->
           <div>
             <label class="block text-gray-400 text-sm mb-2">Importo</label>

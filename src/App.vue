@@ -26,7 +26,7 @@
     <div
       v-show="activeTab === 'home'"
       ref="homeScrollRef"
-      class="fixed inset-0 top-16 bottom-16 overflow-y-auto bg-gray-900"
+      class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
     >
       <HomePage @expense-click="openExpenseDetail" />
     </div>
@@ -34,7 +34,7 @@
     <div
       v-show="activeTab === 'graphic'"
       ref="graphicScrollRef"
-      class="fixed inset-0 top-16 bottom-16 overflow-y-auto bg-gray-900"
+      class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
     >
       <GraphicsPage />
     </div>
@@ -42,7 +42,7 @@
     <div
       v-show="activeTab === 'recurring'"
       ref="recurringScrollRef"
-      class="fixed inset-0 top-16 bottom-16 overflow-y-auto bg-gray-900"
+      class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
     >
       <RecurringPage
         @add-recurring="openCreateRecurring"
@@ -53,7 +53,7 @@
     <div
       v-show="activeTab === 'settings'"
       ref="settingsScrollRef"
-      class="fixed inset-0 top-16 bottom-16 overflow-y-auto bg-gray-900"
+      class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
     >
       <SettingsPage />
     </div>
