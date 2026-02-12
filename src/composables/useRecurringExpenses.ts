@@ -27,7 +27,7 @@ let watchersInitialized = false
 let autoGenerationChecked = false
 
 // Default category fallback
-const defaultCategory = { id: 'other', icon: '📦', color: '#6B7280' }
+const defaultCategory = { id: 'Altro', icon: '📦', color: '#6B7280' }
 
 function getCategoryConfig(categoryId: string) {
   const found = CATEGORIES.find(c => c.id === categoryId)
@@ -216,21 +216,21 @@ export function useRecurringExpenses() {
       if (fetchError) throw fetchError
       if (!items || items.length === 0) return
 
-      let generatedCount = 0
-
-      // Process each recurring expense
-      for (const item of items) {
-        // Check if today is the day to generate
-        if (item.day_of_month !== currentDay) continue
-
-        // Check if already generated this month
+      // Filter items that need generation today
+      const itemsToGenerate = items.filter(item => {
+        if (item.day_of_month !== currentDay) return false
         if (item.last_generated_date) {
           const lastGenMonth = item.last_generated_date.substring(0, 7)
-          if (lastGenMonth === currentMonthKey) continue
+          if (lastGenMonth === currentMonthKey) return false
         }
+        return true
+      })
 
-        // Generate the expense
-        try {
+      if (itemsToGenerate.length === 0) return
+
+      // Process all eligible items in parallel instead of sequentially
+      const results = await Promise.allSettled(
+        itemsToGenerate.map(async (item) => {
           await addExpense({
             description: item.description,
             date: todayDateStr,
@@ -238,7 +238,6 @@ export function useRecurringExpenses() {
             category: item.category_id,
           })
 
-          // Update last_generated_date
           await supabase
             .from('recurring_expenses')
             .update({ last_generated_date: todayDateStr })
@@ -249,12 +248,13 @@ export function useRecurringExpenses() {
           if (localItem) {
             localItem.lastGeneratedDate = todayDateStr
           }
+        })
+      )
 
-          generatedCount++
-        } catch (e) {
-          console.error('Failed to auto-generate expense:', e)
-        }
-      }
+      const generatedCount = results.filter(r => r.status === 'fulfilled').length
+      results.filter(r => r.status === 'rejected').forEach(r => {
+        console.error('Failed to auto-generate expense:', (r as PromiseRejectedResult).reason)
+      })
 
       // Refresh expenses list to show newly added items
       if (generatedCount > 0) {
@@ -269,10 +269,10 @@ export function useRecurringExpenses() {
   if (!watchersInitialized) {
     watchersInitialized = true
 
+    // Only handle logout cleanup.
+    // Login fetch is orchestrated by App.vue to avoid duplicate calls.
     watch(isAuthenticated, (authenticated) => {
-      if (authenticated) {
-        fetchRecurringExpenses()
-      } else {
+      if (!authenticated) {
         recurringExpenses.value = []
         autoGenerationChecked = false
       }

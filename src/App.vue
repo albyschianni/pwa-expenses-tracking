@@ -22,41 +22,47 @@
       @open-avatar="avatarViewerOpen = true"
     />
 
-    <!-- MAIN CONTENT - Each tab has its own scroll container -->
-    <div
-      v-show="activeTab === 'home'"
-      ref="homeScrollRef"
-      class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
-    >
-      <HomePage @expense-click="openExpenseDetail" />
-    </div>
+    <!-- MAIN CONTENT - KeepAlive prevents re-mounting, v-if prevents hidden tabs from reacting -->
+    <KeepAlive>
+      <div
+        v-if="activeTab === 'home'"
+        key="home"
+        ref="homeScrollRef"
+        class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
+      >
+        <HomePage @expense-click="openExpenseDetail" />
+      </div>
 
-    <div
-      v-show="activeTab === 'graphic'"
-      ref="graphicScrollRef"
-      class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
-    >
-      <GraphicsPage />
-    </div>
+      <div
+        v-else-if="activeTab === 'graphic'"
+        key="graphic"
+        ref="graphicScrollRef"
+        class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
+      >
+        <GraphicsPage />
+      </div>
 
-    <div
-      v-show="activeTab === 'recurring'"
-      ref="recurringScrollRef"
-      class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
-    >
-      <RecurringPage
-        @add-recurring="openCreateRecurring"
-        @edit-recurring="openEditRecurring"
-      />
-    </div>
+      <div
+        v-else-if="activeTab === 'recurring'"
+        key="recurring"
+        ref="recurringScrollRef"
+        class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
+      >
+        <RecurringPage
+          @add-recurring="openCreateRecurring"
+          @edit-recurring="openEditRecurring"
+        />
+      </div>
 
-    <div
-      v-show="activeTab === 'settings'"
-      ref="settingsScrollRef"
-      class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
-    >
-      <SettingsPage />
-    </div>
+      <div
+        v-else-if="activeTab === 'settings'"
+        key="settings"
+        ref="settingsScrollRef"
+        class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
+      >
+        <SettingsPage />
+      </div>
+    </KeepAlive>
 
     <!-- TAB BAR (includes centered FAB) -->
     <TabBar
@@ -181,10 +187,10 @@ const selectedExpense = ref<Expense | null>(null)
 const recurringToEdit = ref<RecurringExpense | null>(null)
 
 // Fetch expenses and recurring expenses when authenticated
+// Parallelize independent fetches, then run auto-generation
 watch(isAuthenticated, async (authenticated) => {
   if (authenticated) {
-    await fetchExpenses()
-    await fetchRecurringExpenses()
+    await Promise.all([fetchExpenses(), fetchRecurringExpenses()])
     await processAutoGeneration()
   }
 }, { immediate: true })

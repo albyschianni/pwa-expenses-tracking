@@ -46,18 +46,18 @@
         <h3 class="text-white font-semibold mb-4">Dettaglio categorie</h3>
         <div class="space-y-4">
           <div
-            v-for="[categoryId, amount] in sortedCategories"
-            :key="categoryId"
+            v-for="cat in sortedCategories"
+            :key="cat.categoryId"
             class="space-y-2"
           >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="text-lg">{{ getCategoryConfig(categoryId).icon }}</span>
-                <span class="text-white text-sm">{{ getCategoryConfig(categoryId).label }}</span>
+                <span class="text-lg">{{ cat.config.icon }}</span>
+                <span class="text-white text-sm">{{ cat.config.label }}</span>
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-white font-semibold text-sm">{{ formatCurrency(amount) }}</span>
-                <span class="text-gray-400 text-xs w-10 text-right">{{ getPercentage(amount) }}%</span>
+                <span class="text-white font-semibold text-sm">{{ formatCurrency(cat.amount) }}</span>
+                <span class="text-gray-400 text-xs w-10 text-right">{{ getPercentage(cat.amount) }}%</span>
               </div>
             </div>
             <!-- Progress Bar -->
@@ -65,8 +65,8 @@
               <div
                 class="h-full rounded-full transition-all duration-300"
                 :style="{
-                  width: getPercentage(amount) + '%',
-                  backgroundColor: getCategoryConfig(categoryId).color
+                  width: getPercentage(cat.amount) + '%',
+                  backgroundColor: cat.config.color
                 }"
               />
             </div>
@@ -112,11 +112,16 @@ const categoryTotals = computed(() => {
   return totals
 })
 
-// Sorted by amount (highest first)
+// Sorted by amount (highest first), with category config pre-resolved
 const sortedCategories = computed(() => {
   return [...categoryTotals.value.entries()]
     .sort((a, b) => b[1] - a[1])
     .filter(([, amount]) => amount > 0)
+    .map(([categoryId, amount]) => ({
+      categoryId,
+      amount,
+      config: getCategoryConfig(categoryId),
+    }))
 })
 
 // Get percentage of total
@@ -130,10 +135,10 @@ const formatCurrency = (amount: number) => formatAmount(amount)
 
 // Doughnut chart data
 const doughnutData = computed(() => ({
-  labels: sortedCategories.value.map(([cat]) => getCategoryConfig(cat).label),
+  labels: sortedCategories.value.map(cat => cat.config.label),
   datasets: [{
-    data: sortedCategories.value.map(([, amount]) => amount),
-    backgroundColor: sortedCategories.value.map(([cat]) => getCategoryConfig(cat).color),
+    data: sortedCategories.value.map(cat => cat.amount),
+    backgroundColor: sortedCategories.value.map(cat => cat.config.color),
     borderWidth: 0,
     hoverOffset: 4,
   }]

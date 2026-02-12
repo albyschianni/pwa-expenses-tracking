@@ -10,7 +10,7 @@
 
     <!-- Empty State -->
     <div
-      v-if="sortedExpenses.length === 0"
+      v-if="expenses.length === 0"
       class="text-center py-12"
     >
       <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
@@ -23,7 +23,7 @@
     </div>
 
     <!-- Sort Control -->
-    <div v-if="sortedExpenses.length > 0" class="flex items-center justify-end mb-2 relative">
+    <div v-if="expenses.length > 0" class="flex items-center justify-end mb-2 relative">
       <button
         @click="sortDropdownOpen = !sortDropdownOpen"
         class="flex items-center gap-1.5 text-gray-400 text-xs px-2 py-1 rounded-lg active:bg-gray-800 transition-colors"
@@ -105,8 +105,8 @@ defineEmits(['expense-click'])
 // Access shared month state - will be used for API filtering
 const { displayMonth } = useSelectedMonth()
 
-// Access shared expenses state
-const { sortedExpenses, totalExpenses, formatDate } = useExpenses()
+// Access shared expenses state — use raw expenses, not pre-sorted (we sort locally)
+const { expenses, totalExpenses, formatDate } = useExpenses()
 
 // Currency formatting
 const { formatAmount } = useCurrency()
@@ -132,13 +132,14 @@ function selectSortMode(mode: SortMode) {
   sortDropdownOpen.value = false
 }
 
+// Single sort pass from raw expenses — uses string comparison for dates (ISO YYYY-MM-DD)
 const localSorted = computed(() => {
-  const list = [...sortedExpenses.value]
+  const list = [...expenses.value]
   switch (sortMode.value) {
     case 'date-desc':
-      return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      return list.sort((a, b) => b.date.localeCompare(a.date))
     case 'date-asc':
-      return list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      return list.sort((a, b) => a.date.localeCompare(b.date))
     case 'price-desc':
       return list.sort((a, b) => b.amount - a.amount)
     case 'price-asc':

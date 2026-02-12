@@ -15,18 +15,18 @@ export interface Expense {
 
 // Default categories (also stored in DB for consistency)
 export const CATEGORIES = [
-  { id: 'food', label: 'Food & Dining', icon: '🍽️', color: '#F59E0B' },
-  { id: 'coffee', label: 'Coffee & Drinks', icon: '☕', color: '#8B5CF6' },
-  { id: 'groceries', label: 'Groceries', icon: '🛒', color: '#10B981' },
-  { id: 'housing', label: 'Housing & Rent', icon: '🏠', color: '#3B82F6' },
-  { id: 'entertainment', label: 'Entertainment', icon: '🎵', color: '#1DB954' },
-  { id: 'transport', label: 'Transport', icon: '🚗', color: '#374151' },
-  { id: 'health', label: 'Health & Fitness', icon: '💪', color: '#EF4444' },
-  { id: 'streaming', label: 'Streaming', icon: '🎬', color: '#E50914' },
-  { id: 'utilities', label: 'Utilities', icon: '⚡', color: '#FBBF24' },
-  { id: 'phone', label: 'Phone & Internet', icon: '📱', color: '#6366F1' },
-  { id: 'other', label: 'Other', icon: '📦', color: '#6B7280' },
+  { id: 'Ristoranti', label: 'Ristoranti e Bar', icon: '🍽️', color: '#F59E0B' },
+  { id: 'Spesa', label: 'Spesa Alimentare', icon: '🛒', color: '#10B981' },
+  { id: 'Casa', label: 'Casa e Affitto', icon: '🏠', color: '#3B82F6' },
+  { id: 'Bollette', label: 'Bollette e Utenze', icon: '⚡', color: '#FBBF24' },
+  { id: 'Trasporti', label: 'Trasporti', icon: '🚗', color: '#374151' },
+  { id: 'Salute', label: 'Salute e Benessere', icon: '💪', color: '#EF4444' },
+  { id: 'Intrattenimento', label: 'Intrattenimento', icon: '🎬', color: '#8B5CF6' },
+  { id: 'Abbonamenti', label: 'Abbonamenti', icon: '📱', color: '#6366F1' },
+  { id: 'Shopping', label: 'Shopping', icon: '🛍️', color: '#EC4899' },
+  { id: 'Altro', label: 'Altro', icon: '📦', color: '#6B7280' },
 ] as const
+
 
 // Shared reactive state (singleton pattern)
 const expenses = ref<Expense[]>([])
@@ -40,7 +40,7 @@ let currentLoadedMonth: string | null = null
 let watchersInitialized = false
 
 // Default category fallback
-const defaultCategory = { id: 'other', label: 'Other', icon: '📦', color: '#6B7280' }
+const defaultCategory = { id: 'Altro', label: 'Altro', icon: '📦', color: '#6B7280' }
 
 // Get category config by id
 function getCategoryConfig(categoryId: string) {
@@ -142,12 +142,10 @@ export function useExpenses() {
       }
     })
 
-    // Watch for auth changes
+    // Watch for auth changes — only handle logout cleanup.
+    // Login fetch is orchestrated by App.vue to avoid duplicate calls.
     watch(isAuthenticated, (authenticated) => {
-      if (authenticated) {
-        currentLoadedMonth = null
-        fetchExpenses()
-      } else {
+      if (!authenticated) {
         expenses.value = []
         currentLoadedMonth = null
       }
@@ -160,10 +158,10 @@ export function useExpenses() {
   })
 
   // Expenses sorted by date (newest first)
+  // Uses string comparison — dates are ISO YYYY-MM-DD so lexicographic order is correct.
+  // Avoids creating Date objects on every reactive change.
   const sortedExpenses = computed(() => {
-    return [...expenses.value].sort((a, b) =>
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    )
+    return [...expenses.value].sort((a, b) => b.date.localeCompare(a.date))
   })
 
   // Format date for display

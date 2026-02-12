@@ -38,22 +38,16 @@ initAvatar()
 
 async function fetchAvatar(userId: string) {
   try {
-    // Get public URL for the user's avatar
     const fileName = `${userId}.jpg`
 
-    // Check if file exists by listing
-    const { data: files } = await supabase.storage
+    // Get the public URL directly — no need to pre-check with .list()
+    const { data } = supabase.storage
       .from(BUCKET_NAME)
-      .list('', { search: userId })
+      .getPublicUrl(fileName)
 
-    const hasAvatar = files?.some(f => f.name.startsWith(userId))
-
-    if (hasAvatar) {
-      const { data } = supabase.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(fileName)
-
-      // Add cache buster to force refresh
+    // Verify the image actually exists with a lightweight HEAD request
+    const response = await fetch(data.publicUrl, { method: 'HEAD' })
+    if (response.ok) {
       avatarUrl.value = `${data.publicUrl}?t=${Date.now()}`
     } else {
       avatarUrl.value = null
