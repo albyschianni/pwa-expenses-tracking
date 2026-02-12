@@ -84,7 +84,7 @@
     </button>
 
     <!-- App Version -->
-    <p class="text-center text-gray-600 text-sm mt-6">Expense Tracker v1.0.0</p>
+    <p class="text-center text-gray-600 text-sm mt-6">Expense Tracker v{{ appVersion }}</p>
 
     <!-- Currency Picker Modal -->
     <Teleport to="body">
@@ -292,6 +292,8 @@ import { useAvatar } from '../composables/useAvatar'
 const { user, signOut, loading, displayName, updateProfile, updatePassword } = useAuth()
 const { currency, availableCurrencies, setCurrency, currentCurrency } = useCurrency()
 const { displayAvatarUrl, uploadAvatar } = useAvatar()
+
+const appVersion = __APP_VERSION__
 
 const showCategoryWip = ref(false)
 let categoryWipTimer: ReturnType<typeof setTimeout> | null = null
