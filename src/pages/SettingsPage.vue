@@ -1,13 +1,13 @@
 <template>
   <div class="px-4 py-6">
-    <!-- WIP Toast -->
+    <!-- Export Success Toast -->
     <Transition name="fade">
       <div
-        v-if="showCategoryWip"
+        v-if="exportSuccess"
         class="bg-teal-500/15 border border-teal-500/30 rounded-xl p-3 mb-4 text-center"
       >
-        <p class="text-teal-400 text-sm font-medium">Funzionalit&agrave; in arrivo!</p>
-        <p class="text-gray-400 text-xs mt-1">Se hai categorie da suggerire, faccelo sapere.</p>
+        <p class="text-teal-400 text-sm font-medium">Esportazione completata!</p>
+        <p class="text-gray-400 text-xs mt-1">Il file CSV è stato scaricato.</p>
       </div>
     </Transition>
 
@@ -37,7 +37,8 @@
 
     <!-- Settings List -->
     <div class="bg-gray-800 rounded-2xl overflow-hidden mb-4">
-      <button @click="handleCategoryWip" class="w-full flex items-center gap-4 p-4 text-left border-b border-gray-700 active:bg-gray-700 transition-colors">
+      <!-- Categories -->
+      <button @click="categoriesSheetOpen = true" class="w-full flex items-center gap-4 p-4 text-left border-b border-gray-700 active:bg-gray-700 transition-colors">
         <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
           <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -45,13 +46,30 @@
         </div>
         <div class="flex-1">
           <p class="text-white font-medium">Categorie</p>
-          <p class="text-gray-400 text-sm">Personalizza le categorie</p>
+          <p class="text-gray-400 text-sm">Gestisci e riordina le categorie</p>
         </div>
         <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
         </svg>
       </button>
 
+      <!-- Export -->
+      <button @click="handleExport" class="w-full flex items-center gap-4 p-4 text-left border-b border-gray-700 active:bg-gray-700 transition-colors">
+        <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+          <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <div class="flex-1">
+          <p class="text-white font-medium">Esporta spese</p>
+          <p class="text-gray-400 text-sm">Scarica CSV di {{ displayMonthYear }}</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      <!-- Currency -->
       <button
         @click="currencyPickerOpen = true"
         class="w-full flex items-center gap-4 p-4 text-left active:bg-gray-700 transition-colors"
@@ -85,6 +103,91 @@
 
     <!-- App Version -->
     <p class="text-center text-gray-600 text-sm mt-6">Expense Tracker v{{ appVersion }}</p>
+
+    <!-- Categories Sheet -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="categoriesSheetOpen"
+          class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+          @click="categoriesSheetOpen = false"
+        />
+      </Transition>
+
+      <Transition name="slide-up">
+        <div
+          v-if="categoriesSheetOpen"
+          class="fixed inset-x-0 bottom-0 z-50 bg-gray-800 rounded-t-3xl max-h-[80vh] flex flex-col"
+        >
+          <div class="p-6 pb-0">
+            <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-white text-lg font-semibold">Categorie</h3>
+              <button
+                @click="resetToDefaults"
+                class="text-gray-400 text-sm active:text-white transition-colors"
+              >
+                Ripristina
+              </button>
+            </div>
+            <p class="text-gray-500 text-xs mb-4">Attiva o disattiva le categorie e riordinale.</p>
+          </div>
+
+          <div class="flex-1 overflow-y-auto px-6 pb-8">
+            <div class="space-y-1">
+              <div
+                v-for="(cat, index) in orderedCategories"
+                :key="cat.id"
+                class="flex items-center gap-3 p-3 rounded-xl"
+                :class="cat.visible ? 'bg-gray-700/50' : 'bg-gray-800 opacity-50'"
+              >
+                <!-- Reorder buttons -->
+                <div class="flex flex-col gap-0.5">
+                  <button
+                    @click="moveCategory(cat.id, 'up')"
+                    :disabled="index === 0"
+                    class="w-6 h-6 flex items-center justify-center text-gray-500 disabled:opacity-20 active:text-white transition-colors"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    @click="moveCategory(cat.id, 'down')"
+                    :disabled="index === orderedCategories.length - 1"
+                    class="w-6 h-6 flex items-center justify-center text-gray-500 disabled:opacity-20 active:text-white transition-colors"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+
+                <!-- Icon + Color dot -->
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                  <span class="text-xl">{{ cat.icon }}</span>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-white text-sm font-medium truncate">{{ cat.label }}</p>
+                  </div>
+                </div>
+
+                <!-- Toggle switch -->
+                <button
+                  @click="toggleCategory(cat.id)"
+                  class="relative w-11 h-6 rounded-full transition-colors shrink-0"
+                  :class="cat.visible ? 'bg-teal-400' : 'bg-gray-600'"
+                >
+                  <div
+                    class="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                    :class="cat.visible ? 'translate-x-[22px]' : 'translate-x-0.5'"
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Currency Picker Modal -->
     <Teleport to="body">
@@ -288,21 +391,27 @@ import { computed, ref, reactive, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 import { useCurrency } from '../composables/useCurrency'
 import { useAvatar } from '../composables/useAvatar'
+import { useExpenses } from '../composables/useExpenses'
+import { useCategories } from '../composables/useCategories'
+import { useSelectedMonth } from '../composables/useSelectedMonth'
 
 const { user, signOut, loading, displayName, updateProfile, updatePassword } = useAuth()
 const { currency, availableCurrencies, setCurrency, currentCurrency } = useCurrency()
 const { displayAvatarUrl, uploadAvatar } = useAvatar()
+const { expenses, getCategoryConfig } = useExpenses()
+const { orderedCategories, toggleCategory, moveCategory, resetToDefaults } = useCategories()
+const { displayMonthYear, monthKey } = useSelectedMonth()
 
 const appVersion = __APP_VERSION__
 
-const showCategoryWip = ref(false)
-let categoryWipTimer: ReturnType<typeof setTimeout> | null = null
 const currencyPickerOpen = ref(false)
 const profileSheetOpen = ref(false)
+const categoriesSheetOpen = ref(false)
 const passwordEditMode = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const avatarFileInput = ref<HTMLInputElement | null>(null)
+const exportSuccess = ref(false)
 
 const profileForm = reactive({
   displayName: '',
@@ -340,18 +449,49 @@ const accountCreatedDate = computed(() => {
   })
 })
 
-function handleCategoryWip() {
-  if (categoryWipTimer) clearTimeout(categoryWipTimer)
-  showCategoryWip.value = true
-  categoryWipTimer = setTimeout(() => {
-    showCategoryWip.value = false
+// ── Export ────────────────────────────────────────────────────
+
+function handleExport() {
+  const list = expenses.value
+  if (list.length === 0) {
+    showFeedback('Nessuna spesa da esportare per questo mese', 'error')
+    return
+  }
+
+  // Build CSV
+  const header = 'Data,Descrizione,Categoria,Importo'
+  const rows = [...list]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(e => {
+      const cat = getCategoryConfig(e.category)
+      const desc = e.description.replace(/"/g, '""')
+      const catLabel = (cat.label as string).replace(/"/g, '""')
+      return `${e.date},"${desc}","${catLabel}",${e.amount.toFixed(2)}`
+    })
+
+  const csv = [header, ...rows].join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }) // BOM for Excel
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `spese-${monthKey.value}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+
+  exportSuccess.value = true
+  setTimeout(() => {
+    exportSuccess.value = false
   }, 3000)
 }
+
+// ── Currency ─────────────────────────────────────────────────
 
 function selectCurrency(code: 'EUR' | 'USD' | 'GBP') {
   setCurrency(code)
   currencyPickerOpen.value = false
 }
+
+// ── Feedback ─────────────────────────────────────────────────
 
 function showFeedback(message: string, type: 'success' | 'error') {
   feedbackMessage.value = message
@@ -360,6 +500,8 @@ function showFeedback(message: string, type: 'success' | 'error') {
     feedbackMessage.value = ''
   }, 3000)
 }
+
+// ── Profile ──────────────────────────────────────────────────
 
 async function saveDisplayName() {
   const trimmed = profileForm.displayName.trim()

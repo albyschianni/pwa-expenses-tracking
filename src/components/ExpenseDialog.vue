@@ -82,7 +82,7 @@
             <label class="block text-gray-400 text-sm mb-2">Categoria</label>
             <div class="grid grid-cols-3 gap-2">
               <button
-                v-for="cat in CATEGORIES"
+                v-for="cat in visibleCategories"
                 :key="cat.id"
                 @click="form.category = cat.id"
                 class="flex flex-col items-center gap-1 p-3 rounded-xl transition-all"
@@ -105,10 +105,11 @@
 
 <script setup>
 import { ref, reactive, computed, watch, nextTick } from 'vue'
-import { CATEGORIES } from '../composables/useExpenses'
+import { useCategories } from '../composables/useCategories'
 import { useCurrency } from '../composables/useCurrency'
 
 const { symbol } = useCurrency()
+const { visibleCategories } = useCategories()
 
 const props = defineProps({
   open: Boolean,
