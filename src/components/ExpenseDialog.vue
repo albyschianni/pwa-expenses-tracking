@@ -25,12 +25,13 @@
             Annulla
           </button>
           <h2 class="text-white font-semibold text-lg">
-            {{ isEditing ? 'Modifica Spesa' : 'Nuova Spesa' }}
+            {{ dialogTitle }}
           </h2>
           <button
             @click="handleSave"
             :disabled="!isValid"
-            class="text-teal-400 font-semibold disabled:opacity-40"
+            class="font-semibold disabled:opacity-40"
+            :class="form.type === 'income' ? 'text-emerald-400' : 'text-teal-400'"
           >
             Salva
           </button>
@@ -38,6 +39,29 @@
 
         <!-- Form -->
         <div class="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6" style="overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y;">
+
+          <!-- Type Toggle -->
+          <div class="flex bg-gray-700 rounded-xl p-1">
+            <button
+              @click="setType('expense')"
+              class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+              :class="form.type === 'expense'
+                ? 'bg-gray-900 text-red-400 shadow'
+                : 'text-gray-400'"
+            >
+              Spesa
+            </button>
+            <button
+              @click="setType('income')"
+              class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+              :class="form.type === 'income'
+                ? 'bg-gray-900 text-emerald-400 shadow'
+                : 'text-gray-400'"
+            >
+              Entrata
+            </button>
+          </div>
+
           <!-- Amount -->
           <div>
             <label class="block text-gray-400 text-sm mb-2">Importo</label>
@@ -51,7 +75,10 @@
                 step="0.01"
                 min="0"
                 placeholder="0.00"
-                class="w-full bg-gray-700 text-white text-3xl font-bold rounded-xl py-4 pl-10 pr-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                class="w-full bg-gray-700 text-3xl font-bold rounded-xl py-4 pl-10 pr-4 placeholder-gray-500 focus:outline-none focus:ring-2 transition-colors"
+                :class="form.type === 'income'
+                  ? 'text-emerald-400 focus:ring-emerald-400'
+                  : 'text-red-400 focus:ring-teal-400'"
               />
             </div>
           </div>
@@ -62,7 +89,7 @@
             <input
               v-model="form.description"
               type="text"
-              placeholder="Es: Cena al ristorante"
+              :placeholder="form.type === 'income' ? 'Es: Stipendio marzo' : 'Es: Cena al ristorante'"
               class="w-full bg-gray-700 text-white rounded-xl py-3 px-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
             />
           </div>
@@ -82,13 +109,13 @@
             <label class="block text-gray-400 text-sm mb-2">Categoria</label>
             <div class="grid grid-cols-3 gap-2">
               <button
-                v-for="cat in visibleCategories"
+                v-for="cat in activeCategories"
                 :key="cat.id"
                 @click="form.category = cat.id"
                 class="flex flex-col items-center gap-1 p-3 rounded-xl transition-all"
                 :class="[
                   form.category === cat.id
-                    ? 'bg-teal-400/20 ring-2 ring-teal-400'
+                    ? (form.type === 'income' ? 'bg-emerald-400/20 ring-2 ring-emerald-400' : 'bg-teal-400/20 ring-2 ring-teal-400')
                     : 'bg-gray-700'
                 ]"
               >
@@ -107,6 +134,7 @@
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useCategories } from '../composables/useCategories'
 import { useCurrency } from '../composables/useCurrency'
+import { INCOME_CATEGORIES } from '../composables/useExpenses'
 
 const { symbol } = useCurrency()
 const { visibleCategories } = useCategories()
@@ -128,13 +156,24 @@ const form = reactive({
   description: '',
   date: '',
   amount: '',
-  category: 'other'
+  category: '',
+  type: 'expense'
 })
 
-// Check if we're editing an existing expense
+// Categories based on current type
+const activeCategories = computed(() => {
+  return form.type === 'income' ? INCOME_CATEGORIES : visibleCategories.value
+})
+
 const isEditing = computed(() => props.expense !== null)
 
-// Form validation
+const dialogTitle = computed(() => {
+  if (isEditing.value) {
+    return form.type === 'income' ? 'Modifica Entrata' : 'Modifica Spesa'
+  }
+  return form.type === 'income' ? 'Nuova Entrata' : 'Nuova Spesa'
+})
+
 const isValid = computed(() => {
   return (
     form.description.trim() !== '' &&
@@ -145,6 +184,14 @@ const isValid = computed(() => {
   )
 })
 
+// Switch type and reset category to first of new type
+function setType(type) {
+  if (form.type === type) return
+  form.type = type
+  const cats = type === 'income' ? INCOME_CATEGORIES : visibleCategories.value
+  form.category = cats[0]?.id || ''
+}
+
 // Reset form when dialog opens/closes or expense changes
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
@@ -152,14 +199,16 @@ watch(() => props.open, (isOpen) => {
       // Editing mode: populate form with expense data
       form.description = props.expense.description
       form.date = props.expense.date
-      form.amount = props.expense.amount.toString()
+      form.amount = Math.abs(props.expense.amount).toString()
       form.category = props.expense.category
+      form.type = props.expense.type ?? 'expense'
     } else {
       // Create mode: reset form with defaults
       form.description = ''
-      form.date = new Date().toISOString().split('T')[0] // Today's date
+      form.date = new Date().toISOString().split('T')[0]
       form.amount = ''
-      form.category = 'other'
+      form.type = 'expense'
+      form.category = visibleCategories.value[0]?.id || 'Altro'
     }
     // Focus amount input after animation
     nextTick(() => {
@@ -179,7 +228,8 @@ function handleSave() {
     description: form.description.trim(),
     date: form.date,
     amount: parseFloat(form.amount),
-    category: form.category
+    category: form.category,
+    type: form.type,
   })
   emit('close')
 }

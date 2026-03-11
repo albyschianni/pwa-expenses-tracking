@@ -7,78 +7,141 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
         </svg>
       </div>
-      <p class="text-gray-400 mb-1">Nessuna spesa da visualizzare</p>
-      <p class="text-gray-500 text-sm">Aggiungi una spesa per vedere i grafici</p>
+      <p class="text-gray-400 mb-1">Nessuna transazione da visualizzare</p>
+      <p class="text-gray-500 text-sm">Aggiungi una transazione per vedere i grafici</p>
     </div>
 
     <!-- Charts Content -->
-    <div v-else class="space-y-6">
-      <!-- Summary Card -->
-      <div class="bg-gray-800 rounded-2xl p-4">
-        <div class="text-center">
-          <p class="text-3xl font-bold text-white mb-1">
-            {{ formatCurrency(totalExpenses) }}
-          </p>
-          <p class="text-gray-400 text-sm">
-            {{ expenses.length }} {{ expenses.length === 1 ? 'transazione' : 'transazioni' }}
-            <span v-if="averageExpense > 0"> · {{ formatCurrency(averageExpense) }}/media</span>
-          </p>
-        </div>
-      </div>
+    <div v-else class="space-y-5">
 
-      <!-- Doughnut Chart -->
-      <div class="bg-gray-800 rounded-2xl p-4">
-        <h3 class="text-white font-semibold mb-4">Spese per categoria</h3>
-        <div class="relative mx-auto" style="max-width: 280px;">
-          <Doughnut :data="doughnutData" :options="doughnutOptions" />
-          <!-- Center Text -->
-          <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div class="text-center">
-              <p class="text-2xl font-bold text-white">{{ formatCurrency(totalExpenses) }}</p>
-              <p class="text-gray-400 text-xs">Totale</p>
-            </div>
-          </div>
+      <!-- Balance Summary Row -->
+      <div class="grid grid-cols-3 gap-2">
+        <div class="bg-gray-800 rounded-2xl p-3 text-center">
+          <p class="text-emerald-400 font-bold text-base">+{{ formatCurrency(totalIncome) }}</p>
+          <p class="text-gray-500 text-xs mt-0.5">Entrate</p>
         </div>
-      </div>
-
-      <!-- Category List -->
-      <div class="bg-gray-800 rounded-2xl p-4">
-        <h3 class="text-white font-semibold mb-4">Dettaglio categorie</h3>
-        <div class="space-y-4">
-          <div
-            v-for="cat in sortedCategories"
-            :key="cat.categoryId"
-            class="space-y-2"
+        <div class="bg-gray-800 rounded-2xl p-3 text-center">
+          <p
+            class="font-bold text-base"
+            :class="balance >= 0 ? 'text-emerald-400' : 'text-red-400'"
           >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="text-lg">{{ cat.config.icon }}</span>
-                <span class="text-white text-sm">{{ cat.config.label }}</span>
+            {{ balance >= 0 ? '+' : '' }}{{ formatCurrency(balance) }}
+          </p>
+          <p class="text-gray-500 text-xs mt-0.5">Saldo</p>
+        </div>
+        <div class="bg-gray-800 rounded-2xl p-3 text-center">
+          <p class="text-red-400 font-bold text-base">-{{ formatCurrency(totalExpenses) }}</p>
+          <p class="text-gray-500 text-xs mt-0.5">Uscite</p>
+        </div>
+      </div>
+
+      <!-- Type Toggle -->
+      <div class="flex bg-gray-800 rounded-xl p-1">
+        <button
+          @click="chartType = 'expense'"
+          class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+          :class="chartType === 'expense'
+            ? 'bg-gray-700 text-red-400 shadow'
+            : 'text-gray-400'"
+        >
+          Spese
+        </button>
+        <button
+          @click="chartType = 'income'"
+          class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+          :class="chartType === 'income'
+            ? 'bg-gray-700 text-emerald-400 shadow'
+            : 'text-gray-400'"
+        >
+          Entrate
+        </button>
+      </div>
+
+      <!-- No data for selected type -->
+      <div v-if="filteredExpenses.length === 0" class="bg-gray-800 rounded-2xl p-8 text-center">
+        <p class="text-gray-400 text-sm">
+          Nessuna {{ chartType === 'income' ? 'entrata' : 'spesa' }} questo mese
+        </p>
+      </div>
+
+      <template v-else>
+        <!-- Summary Card for selected type -->
+        <div class="bg-gray-800 rounded-2xl p-4">
+          <div class="text-center">
+            <p
+              class="text-3xl font-bold mb-1"
+              :class="chartType === 'income' ? 'text-emerald-400' : 'text-white'"
+            >
+              {{ chartType === 'income' ? '+' : '' }}{{ formatCurrency(filteredTotal) }}
+            </p>
+            <p class="text-gray-400 text-sm">
+              {{ filteredExpenses.length }} {{ filteredExpenses.length === 1 ? 'transazione' : 'transazioni' }}
+              <span v-if="filteredAverage > 0"> · {{ formatCurrency(filteredAverage) }}/media</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Doughnut Chart -->
+        <div class="bg-gray-800 rounded-2xl p-4">
+          <h3 class="text-white font-semibold mb-4">
+            {{ chartType === 'income' ? 'Entrate per categoria' : 'Spese per categoria' }}
+          </h3>
+          <div class="relative mx-auto" style="max-width: 280px;">
+            <Doughnut :data="doughnutData" :options="doughnutOptions" :key="chartType" />
+            <!-- Center Text -->
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div class="text-center">
+                <p class="text-2xl font-bold text-white">{{ formatCurrency(filteredTotal) }}</p>
+                <p class="text-gray-400 text-xs">Totale</p>
               </div>
-              <div class="flex items-center gap-2">
-                <span class="text-white font-semibold text-sm">{{ formatCurrency(cat.amount) }}</span>
-                <span class="text-gray-400 text-xs w-10 text-right">{{ getPercentage(cat.amount) }}%</span>
-              </div>
-            </div>
-            <!-- Progress Bar -->
-            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
-              <div
-                class="h-full rounded-full transition-all duration-300"
-                :style="{
-                  width: getPercentage(cat.amount) + '%',
-                  backgroundColor: cat.config.color
-                }"
-              />
             </div>
           </div>
         </div>
-      </div>
+
+        <!-- Category List -->
+        <div class="bg-gray-800 rounded-2xl p-4">
+          <h3 class="text-white font-semibold mb-4">Dettaglio categorie</h3>
+          <div class="space-y-4">
+            <div
+              v-for="cat in sortedCategories"
+              :key="cat.categoryId"
+              class="space-y-2"
+            >
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="text-lg">{{ cat.config.icon }}</span>
+                  <span class="text-white text-sm">{{ cat.config.label }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span
+                    class="font-semibold text-sm"
+                    :class="chartType === 'income' ? 'text-emerald-400' : 'text-white'"
+                  >
+                    {{ chartType === 'income' ? '+' : '' }}{{ formatCurrency(cat.amount) }}
+                  </span>
+                  <span class="text-gray-400 text-xs w-10 text-right">{{ getPercentage(cat.amount) }}%</span>
+                </div>
+              </div>
+              <!-- Progress Bar -->
+              <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  class="h-full rounded-full transition-all duration-300"
+                  :style="{
+                    width: getPercentage(cat.amount) + '%',
+                    backgroundColor: cat.config.color
+                  }"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -88,31 +151,37 @@ import {
 import { useExpenses } from '../composables/useExpenses'
 import { useCurrency } from '../composables/useCurrency'
 
-// Register Chart.js components
 ChartJS.register(ArcElement, Tooltip)
 
-// Get expenses data
-const { expenses, totalExpenses, getCategoryConfig } = useExpenses()
-
-// Currency formatting
+const { expenses, balance, totalExpenses, totalIncome, getCategoryConfig } = useExpenses()
 const { formatAmount } = useCurrency()
 
-// Average expense
-const averageExpense = computed(() => {
-  if (expenses.value.length === 0) return 0
-  return totalExpenses.value / expenses.value.length
+// Toggle: which type to chart
+const chartType = ref<'expense' | 'income'>('expense')
+
+// Transactions filtered by selected type
+const filteredExpenses = computed(() =>
+  expenses.value.filter(e => e.type === chartType.value)
+)
+
+const filteredTotal = computed(() =>
+  filteredExpenses.value.reduce((sum, e) => sum + e.amount, 0)
+)
+
+const filteredAverage = computed(() => {
+  if (filteredExpenses.value.length === 0) return 0
+  return filteredTotal.value / filteredExpenses.value.length
 })
 
-// Group expenses by category
+// Group by category for selected type
 const categoryTotals = computed(() => {
   const totals = new Map<string, number>()
-  expenses.value.forEach(e => {
+  filteredExpenses.value.forEach(e => {
     totals.set(e.category, (totals.get(e.category) || 0) + e.amount)
   })
   return totals
 })
 
-// Sorted by amount (highest first), with category config pre-resolved
 const sortedCategories = computed(() => {
   return [...categoryTotals.value.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -124,16 +193,13 @@ const sortedCategories = computed(() => {
     }))
 })
 
-// Get percentage of total
 function getPercentage(amount: number): number {
-  if (totalExpenses.value === 0) return 0
-  return Math.round((amount / totalExpenses.value) * 100)
+  if (filteredTotal.value === 0) return 0
+  return Math.round((amount / filteredTotal.value) * 100)
 }
 
-// Format currency - use composable
 const formatCurrency = (amount: number) => formatAmount(amount)
 
-// Doughnut chart data
 const doughnutData = computed(() => ({
   labels: sortedCategories.value.map(cat => cat.config.label),
   datasets: [{
@@ -144,7 +210,6 @@ const doughnutData = computed(() => ({
   }]
 }))
 
-// Doughnut chart options
 const doughnutOptions = {
   responsive: true,
   maintainAspectRatio: true,

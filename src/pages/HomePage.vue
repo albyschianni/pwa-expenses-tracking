@@ -2,10 +2,20 @@
   <div class="px-4 pt-1 pb-3">
     <!-- Balance Hero -->
     <div class="text-center mb-4">
-      <p class="text-4xl font-bold text-white mb-1">
-        {{ formatAmount(totalExpenses) }}
+      <p
+        class="text-4xl font-bold mb-1 transition-colors"
+        :class="balance > 0 ? 'text-emerald-400' : balance < 0 ? 'text-red-400' : 'text-white'"
+      >
+        {{ balance >= 0 ? '+' : '' }}{{ formatAmount(balance) }}
       </p>
-      <p class="text-gray-400 text-sm">Spese totali di {{ displayMonth }}</p>
+      <p class="text-gray-400 text-sm">Saldo di {{ displayMonth }}</p>
+
+      <!-- Income / Expense breakdown -->
+      <div v-if="expenses.length > 0" class="flex justify-center gap-4 mt-2">
+        <span class="text-xs text-emerald-400">+{{ formatAmount(totalIncome) }}</span>
+        <span class="text-xs text-gray-600">·</span>
+        <span class="text-xs text-red-400">-{{ formatAmount(totalExpenses) }}</span>
+      </div>
     </div>
 
     <!-- Empty State -->
@@ -18,8 +28,8 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       </div>
-      <p class="text-gray-400 mb-1">Nessuna spesa</p>
-      <p class="text-gray-500 text-sm">Premi + per aggiungere una spesa</p>
+      <p class="text-gray-400 mb-1">Nessuna transazione</p>
+      <p class="text-gray-500 text-sm">Premi + per aggiungere una transazione</p>
     </div>
 
     <!-- Sort Control -->
@@ -63,7 +73,7 @@
     <!-- Dropdown backdrop -->
     <div v-if="sortDropdownOpen" class="fixed inset-0 z-0" @click="sortDropdownOpen = false" />
 
-    <!-- Expense List -->
+    <!-- Transaction List -->
     <div v-if="localSorted.length > 0" class="space-y-3">
       <button
         v-for="expense in localSorted"
@@ -85,9 +95,12 @@
           <p class="text-gray-400 text-sm">{{ formatDate(expense.date) }}</p>
         </div>
 
-        <!-- Amount -->
-        <p class="text-white font-semibold whitespace-nowrap">
-          -{{ formatAmount(expense.amount) }}
+        <!-- Amount — green for income, red for expense -->
+        <p
+          class="font-semibold whitespace-nowrap"
+          :class="expense.type === 'income' ? 'text-emerald-400' : 'text-red-400'"
+        >
+          {{ expense.type === 'income' ? '+' : '-' }}{{ formatAmount(expense.amount) }}
         </p>
       </button>
     </div>
@@ -102,13 +115,8 @@ import { useCurrency } from '../composables/useCurrency'
 
 defineEmits(['expense-click'])
 
-// Access shared month state - will be used for API filtering
 const { displayMonth } = useSelectedMonth()
-
-// Access shared expenses state — use raw expenses, not pre-sorted (we sort locally)
-const { expenses, totalExpenses, formatDate } = useExpenses()
-
-// Currency formatting
+const { expenses, balance, totalExpenses, totalIncome, formatDate } = useExpenses()
 const { formatAmount } = useCurrency()
 
 // Sorting
@@ -116,10 +124,10 @@ type SortMode = 'date-desc' | 'date-asc' | 'price-desc' | 'price-asc'
 const sortMode = ref<SortMode>('date-desc')
 
 const sortLabels: Record<SortMode, string> = {
-  'date-desc': 'Pi\u00f9 recenti',
+  'date-desc': 'Più recenti',
   'date-asc': 'Meno recenti',
-  'price-desc': 'Pi\u00f9 costose',
-  'price-asc': 'Meno costose',
+  'price-desc': 'Importo ↓',
+  'price-asc': 'Importo ↑',
 }
 
 const sortLabel = computed(() => sortLabels[sortMode.value])
@@ -132,7 +140,6 @@ function selectSortMode(mode: SortMode) {
   sortDropdownOpen.value = false
 }
 
-// Single sort pass from raw expenses — uses string comparison for dates (ISO YYYY-MM-DD)
 const localSorted = computed(() => {
   const list = [...expenses.value]
   switch (sortMode.value) {

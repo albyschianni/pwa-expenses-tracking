@@ -228,7 +228,7 @@ function closeExpenseDialog() {
 // ============================================================
 // SAVE EXPENSE (Create or Update)
 // ============================================================
-async function handleSaveExpense(data: { description: string; date: string; amount: number; category: string }) {
+async function handleSaveExpense(data: { description: string; date: string; amount: number; category: string; type: 'expense' | 'income' }) {
   try {
     if (expenseToEdit.value) {
       await updateExpense(expenseToEdit.value.id, data)
@@ -270,7 +270,7 @@ function closeRecurringDialog() {
   recurringToEdit.value = null
 }
 
-async function handleSaveRecurring(data: { description: string; amount: number; category: string; dayOfMonth: number }) {
+async function handleSaveRecurring(data: { description: string; amount: number; category: string; dayOfMonth: number; type: 'expense' | 'income' }) {
   try {
     if (recurringToEdit.value) {
       await updateRecurringExpense(recurringToEdit.value.id, data)

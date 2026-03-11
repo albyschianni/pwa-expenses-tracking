@@ -24,19 +24,43 @@
             Annulla
           </button>
           <h2 class="text-white font-semibold text-lg">
-            {{ isEditing ? 'Modifica Ricorrenza' : 'Nuova Ricorrenza' }}
+            {{ dialogTitle }}
           </h2>
           <button
             @click="handleSave"
             :disabled="!isValid"
-            class="text-teal-400 font-semibold disabled:opacity-40"
+            class="font-semibold disabled:opacity-40"
+            :class="form.type === 'income' ? 'text-emerald-400' : 'text-teal-400'"
           >
             Salva
           </button>
         </div>
 
         <!-- Form -->
-        <div class="flex-1 overflow-y-auto p-4 space-y-6">
+        <div class="flex-1 overflow-y-auto p-4 space-y-6" style="overscroll-behavior: contain; -webkit-overflow-scrolling: touch;">
+
+          <!-- Type Toggle -->
+          <div class="flex bg-gray-700 rounded-xl p-1">
+            <button
+              @click="setType('expense')"
+              class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+              :class="form.type === 'expense'
+                ? 'bg-gray-900 text-red-400 shadow'
+                : 'text-gray-400'"
+            >
+              Spesa
+            </button>
+            <button
+              @click="setType('income')"
+              class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+              :class="form.type === 'income'
+                ? 'bg-gray-900 text-emerald-400 shadow'
+                : 'text-gray-400'"
+            >
+              Entrata
+            </button>
+          </div>
+
           <!-- Amount -->
           <div>
             <label class="block text-gray-400 text-sm mb-2">Importo</label>
@@ -50,7 +74,10 @@
                 step="0.01"
                 min="0"
                 placeholder="0.00"
-                class="w-full bg-gray-700 text-white text-3xl font-bold rounded-xl py-4 pl-10 pr-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                class="w-full bg-gray-700 text-3xl font-bold rounded-xl py-4 pl-10 pr-4 placeholder-gray-500 focus:outline-none focus:ring-2 transition-colors"
+                :class="form.type === 'income'
+                  ? 'text-emerald-400 focus:ring-emerald-400'
+                  : 'text-white focus:ring-teal-400'"
               />
             </div>
           </div>
@@ -61,7 +88,7 @@
             <input
               v-model="form.description"
               type="text"
-              placeholder="Es: Abbonamento Netflix"
+              :placeholder="form.type === 'income' ? 'Es: Stipendio' : 'Es: Abbonamento Netflix'"
               class="w-full bg-gray-700 text-white rounded-xl py-3 px-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
             />
           </div>
@@ -79,7 +106,7 @@
               class="w-full bg-gray-700 text-white rounded-xl py-3 px-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
             />
             <p class="text-gray-500 text-xs mt-1">
-              Inserisci un valore da 1 a 28. La spesa verrà aggiunta automaticamente questo giorno ogni mese.
+              Da 1 a 28. La transazione verrà aggiunta automaticamente questo giorno ogni mese.
             </p>
           </div>
 
@@ -88,13 +115,13 @@
             <label class="block text-gray-400 text-sm mb-2">Categoria</label>
             <div class="grid grid-cols-3 gap-2">
               <button
-                v-for="cat in visibleCategories"
+                v-for="cat in activeCategories"
                 :key="cat.id"
                 @click="form.category = cat.id"
                 class="flex flex-col items-center gap-1 p-3 rounded-xl transition-all"
                 :class="[
                   form.category === cat.id
-                    ? 'bg-teal-400/20 ring-2 ring-teal-400'
+                    ? (form.type === 'income' ? 'bg-emerald-400/20 ring-2 ring-emerald-400' : 'bg-teal-400/20 ring-2 ring-teal-400')
                     : 'bg-gray-700'
                 ]"
               >
@@ -125,10 +152,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useCategories } from '../composables/useCategories'
+import { INCOME_CATEGORIES } from '../composables/useExpenses'
 import type { RecurringExpense } from '../composables/useRecurringExpenses'
 import { useCurrency } from '../composables/useCurrency'
 
 const { visibleCategories } = useCategories()
+const { symbol } = useCurrency()
 
 const props = defineProps<{
   open: boolean
@@ -137,22 +166,32 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'save', data: { description: string; amount: number; category: string; dayOfMonth: number }): void
+  (e: 'save', data: { description: string; amount: number; category: string; dayOfMonth: number; type: 'expense' | 'income' }): void
   (e: 'delete', id: string): void
 }>()
-
-const { symbol } = useCurrency()
 
 const amountInput = ref<HTMLInputElement | null>(null)
 
 const form = reactive({
   description: '',
-  amount: '',
-  category: 'other',
-  dayOfMonth: '',
+  amount:      '',
+  category:    '',
+  dayOfMonth:  '',
+  type:        'expense' as 'expense' | 'income',
 })
 
+const activeCategories = computed(() =>
+  form.type === 'income' ? INCOME_CATEGORIES : visibleCategories.value
+)
+
 const isEditing = computed(() => props.recurringExpense !== null)
+
+const dialogTitle = computed(() => {
+  if (isEditing.value) {
+    return form.type === 'income' ? 'Modifica Entrata Ricorrente' : 'Modifica Spesa Ricorrente'
+  }
+  return form.type === 'income' ? 'Nuova Entrata Ricorrente' : 'Nuova Spesa Ricorrente'
+})
 
 const isValid = computed(() => {
   const day = parseInt(form.dayOfMonth)
@@ -161,24 +200,31 @@ const isValid = computed(() => {
     form.amount !== '' &&
     parseFloat(form.amount) > 0 &&
     form.category !== '' &&
-    !isNaN(day) &&
-    day >= 1 &&
-    day <= 28
+    !isNaN(day) && day >= 1 && day <= 28
   )
 })
+
+function setType(type: 'expense' | 'income') {
+  if (form.type === type) return
+  form.type = type
+  const cats = type === 'income' ? INCOME_CATEGORIES : visibleCategories.value
+  form.category = cats[0]?.id || ''
+}
 
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
     if (props.recurringExpense) {
       form.description = props.recurringExpense.description
-      form.amount = props.recurringExpense.amount.toString()
-      form.category = props.recurringExpense.category
-      form.dayOfMonth = props.recurringExpense.dayOfMonth.toString()
+      form.amount      = props.recurringExpense.amount.toString()
+      form.category    = props.recurringExpense.category
+      form.dayOfMonth  = props.recurringExpense.dayOfMonth.toString()
+      form.type        = props.recurringExpense.type ?? 'expense'
     } else {
       form.description = ''
-      form.amount = ''
-      form.category = 'other'
-      form.dayOfMonth = '1'
+      form.amount      = ''
+      form.type        = 'expense'
+      form.category    = visibleCategories.value[0]?.id || 'Altro'
+      form.dayOfMonth  = '1'
     }
     nextTick(() => {
       setTimeout(() => amountInput.value?.focus(), 300)
@@ -194,9 +240,10 @@ function handleSave() {
   if (!isValid.value) return
   emit('save', {
     description: form.description.trim(),
-    amount: parseFloat(form.amount),
-    category: form.category,
-    dayOfMonth: parseInt(form.dayOfMonth),
+    amount:      parseFloat(form.amount),
+    category:    form.category,
+    dayOfMonth:  parseInt(form.dayOfMonth),
+    type:        form.type,
   })
 }
 

@@ -31,10 +31,21 @@
               {{ expense.icon }}
             </div>
             <div class="flex-1">
-              <p class="text-3xl font-bold text-white">
-                {{ formatAmount(expense.amount) }}
+              <p
+                class="text-3xl font-bold"
+                :class="isIncome ? 'text-emerald-400' : 'text-red-400'"
+              >
+                {{ isIncome ? '+' : '-' }}{{ formatAmount(expense.amount) }}
               </p>
-              <p class="text-gray-400 text-sm">{{ categoryLabel }}</p>
+              <div class="flex items-center gap-2 mt-0.5">
+                <span
+                  class="text-xs px-2 py-0.5 rounded-full font-medium"
+                  :class="isIncome ? 'bg-emerald-400/15 text-emerald-400' : 'bg-red-400/15 text-red-400'"
+                >
+                  {{ isIncome ? 'Entrata' : 'Spesa' }}
+                </span>
+                <span class="text-gray-400 text-sm">{{ categoryLabel }}</span>
+              </div>
             </div>
           </div>
 
@@ -61,7 +72,8 @@
           <div class="space-y-2">
             <button
               @click="handleEdit"
-              class="w-full flex items-center justify-center gap-3 p-4 rounded-xl bg-teal-400 text-gray-900 font-semibold active:bg-teal-500 transition-colors"
+              class="w-full flex items-center justify-center gap-3 p-4 rounded-xl font-semibold active:opacity-80 transition-colors"
+              :class="isIncome ? 'bg-emerald-400 text-gray-900' : 'bg-teal-400 text-gray-900'"
             >
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -91,7 +103,9 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </div>
-            <p class="text-white text-lg font-semibold mb-2">Eliminare questa spesa?</p>
+            <p class="text-white text-lg font-semibold mb-2">
+              Eliminare questa {{ isIncome ? 'entrata' : 'spesa' }}?
+            </p>
             <p class="text-gray-400 text-center mb-6">{{ expense.description }}</p>
             <div class="flex gap-3 w-full">
               <button
@@ -116,7 +130,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { CATEGORIES } from '../composables/useExpenses'
+import { CATEGORIES, INCOME_CATEGORIES } from '../composables/useExpenses'
 import { useCurrency } from '../composables/useCurrency'
 
 const props = defineProps({
@@ -133,17 +147,19 @@ const { formatAmount } = useCurrency()
 
 const showDeleteConfirm = ref(false)
 
-// Reset delete confirmation when dialog closes
 watch(() => props.open, (isOpen) => {
   if (!isOpen) {
     showDeleteConfirm.value = false
   }
 })
 
+const isIncome = computed(() => props.expense?.type === 'income')
+
 const categoryLabel = computed(() => {
   if (!props.expense) return ''
-  const cat = CATEGORIES.find(c => c.id === props.expense.category)
-  return cat?.label || 'Other'
+  const allCats = [...CATEGORIES, ...INCOME_CATEGORIES]
+  const cat = allCats.find(c => c.id === props.expense.category)
+  return cat?.label || props.expense.category
 })
 
 const formattedDate = computed(() => {

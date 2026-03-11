@@ -13,6 +13,7 @@ export interface DbExpense {
   amount: number
   date: string
   category_id: string
+  transaction_type: 'expense' | 'income' | null
   created_at: string
   updated_at: string
 }
@@ -35,6 +36,7 @@ export interface DbRecurringExpense {
   day_of_month: number
   enabled: boolean
   last_generated_date: string | null
+  transaction_type: 'expense' | 'income' | null
   created_at: string
   updated_at: string
 }

@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 import { supabase, type DbRecurringExpense } from '../lib/supabase'
 import { useAuth } from './useAuth'
-import { useExpenses, CATEGORIES } from './useExpenses'
+import { useExpenses, getCategoryConfig, type TransactionType } from './useExpenses'
 
 export interface RecurringExpense {
   id: string
@@ -13,6 +13,7 @@ export interface RecurringExpense {
   dayOfMonth: number
   enabled: boolean
   lastGeneratedDate: string | null
+  type: TransactionType
 }
 
 // Singleton state
@@ -20,32 +21,23 @@ const recurringExpenses = ref<RecurringExpense[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-// Prevent duplicate watchers
 let watchersInitialized = false
-
-// Track if auto-generation has been checked this session
 let autoGenerationChecked = false
 
-// Default category fallback
-const defaultCategory = { id: 'Altro', icon: '📦', color: '#6B7280' }
-
-function getCategoryConfig(categoryId: string) {
-  const found = CATEGORIES.find(c => c.id === categoryId)
-  return found ?? defaultCategory
-}
-
 function transformRecurringExpense(db: DbRecurringExpense): RecurringExpense {
+  const txType: TransactionType = db.transaction_type === 'income' ? 'income' : 'expense'
   const cat = getCategoryConfig(db.category_id)
   return {
-    id: db.id,
-    description: db.description,
-    amount: Number(db.amount),
-    category: db.category_id,
-    categoryIcon: cat.icon as string,
-    categoryColor: cat.color as string,
-    dayOfMonth: db.day_of_month,
-    enabled: db.enabled,
+    id:                db.id,
+    description:       db.description,
+    amount:            Number(db.amount),
+    category:          db.category_id,
+    categoryIcon:      cat.icon,
+    categoryColor:     cat.color,
+    dayOfMonth:        db.day_of_month,
+    enabled:           db.enabled,
     lastGeneratedDate: db.last_generated_date,
+    type:              txType,
   }
 }
 
@@ -83,6 +75,7 @@ export function useRecurringExpenses() {
     amount: number
     category: string
     dayOfMonth: number
+    type?: TransactionType
   }) {
     if (!user.value) throw new Error('Not authenticated')
 
@@ -93,12 +86,13 @@ export function useRecurringExpenses() {
       const { data: newItem, error: insertError } = await supabase
         .from('recurring_expenses')
         .insert({
-          user_id: user.value.id,
-          description: data.description,
-          amount: data.amount,
-          category_id: data.category,
-          day_of_month: data.dayOfMonth,
-          enabled: true,
+          user_id:          user.value.id,
+          description:      data.description,
+          amount:           data.amount,
+          category_id:      data.category,
+          day_of_month:     data.dayOfMonth,
+          enabled:          true,
+          transaction_type: data.type ?? 'expense',
         })
         .select()
         .single()
@@ -122,6 +116,7 @@ export function useRecurringExpenses() {
       category: string
       dayOfMonth: number
       enabled: boolean
+      type: TransactionType
     }>
   ) {
     if (!user.value) throw new Error('Not authenticated')
@@ -130,13 +125,23 @@ export function useRecurringExpenses() {
     error.value = null
 
     try {
-      const updateData: Record<string, unknown> = {}
-      if (data.description !== undefined) updateData.description = data.description
-      if (data.amount !== undefined) updateData.amount = data.amount
-      if (data.category !== undefined) updateData.category_id = data.category
-      if (data.dayOfMonth !== undefined) updateData.day_of_month = data.dayOfMonth
-      if (data.enabled !== undefined) updateData.enabled = data.enabled
-      updateData.updated_at = new Date().toISOString()
+      type UpdatePayload = {
+        description?:      string
+        amount?:           number
+        category_id?:      string
+        day_of_month?:     number
+        enabled?:          boolean
+        transaction_type?: TransactionType
+        updated_at:        string
+      }
+
+      const updateData: UpdatePayload = { updated_at: new Date().toISOString() }
+      if (data.description !== undefined) updateData.description      = data.description
+      if (data.amount      !== undefined) updateData.amount           = data.amount
+      if (data.category    !== undefined) updateData.category_id      = data.category
+      if (data.dayOfMonth  !== undefined) updateData.day_of_month     = data.dayOfMonth
+      if (data.enabled     !== undefined) updateData.enabled          = data.enabled
+      if (data.type        !== undefined) updateData.transaction_type = data.type
 
       const { data: updated, error: updateError } = await supabase
         .from('recurring_expenses')
@@ -183,31 +188,27 @@ export function useRecurringExpenses() {
     }
   }
 
-  // Toggle enabled state (convenience method)
   async function toggleEnabled(id: string) {
     const item = recurringExpenses.value.find(r => r.id === id)
     if (!item) return
     return updateRecurringExpense(id, { enabled: !item.enabled })
   }
 
-  // Auto-generation logic - runs when app opens
   async function processAutoGeneration() {
-    // Only run once per session
     if (autoGenerationChecked) return
     autoGenerationChecked = true
 
     if (!isAuthenticated.value || !user.value) return
 
     const today = new Date()
-    const year = today.getFullYear()
+    const year  = today.getFullYear()
     const month = String(today.getMonth() + 1).padStart(2, '0')
-    const day = String(today.getDate()).padStart(2, '0')
-    const todayDateStr = `${year}-${month}-${day}`
-    const currentDay = today.getDate()
+    const day   = String(today.getDate()).padStart(2, '0')
+    const todayDateStr    = `${year}-${month}-${day}`
+    const currentDay      = today.getDate()
     const currentMonthKey = `${year}-${month}`
 
     try {
-      // Fetch all enabled recurring expenses for this user
       const { data: items, error: fetchError } = await supabase
         .from('recurring_expenses')
         .select('*')
@@ -216,26 +217,26 @@ export function useRecurringExpenses() {
       if (fetchError) throw fetchError
       if (!items || items.length === 0) return
 
-      // Filter items that need generation today
       const itemsToGenerate = items.filter(item => {
         if (item.day_of_month !== currentDay) return false
         if (item.last_generated_date) {
-          const lastGenMonth = item.last_generated_date.substring(0, 7)
-          if (lastGenMonth === currentMonthKey) return false
+          if (item.last_generated_date.substring(0, 7) === currentMonthKey) return false
         }
         return true
       })
 
       if (itemsToGenerate.length === 0) return
 
-      // Process all eligible items in parallel instead of sequentially
       const results = await Promise.allSettled(
         itemsToGenerate.map(async (item) => {
+          const txType: TransactionType = item.transaction_type === 'income' ? 'income' : 'expense'
+
           await addExpense({
             description: item.description,
-            date: todayDateStr,
-            amount: Number(item.amount),
-            category: item.category_id,
+            date:        todayDateStr,
+            amount:      Number(item.amount),
+            category:    item.category_id,
+            type:        txType,
           })
 
           await supabase
@@ -243,7 +244,6 @@ export function useRecurringExpenses() {
             .update({ last_generated_date: todayDateStr })
             .eq('id', item.id)
 
-          // Update local state
           const localItem = recurringExpenses.value.find(r => r.id === item.id)
           if (localItem) {
             localItem.lastGeneratedDate = todayDateStr
@@ -253,10 +253,9 @@ export function useRecurringExpenses() {
 
       const generatedCount = results.filter(r => r.status === 'fulfilled').length
       results.filter(r => r.status === 'rejected').forEach(r => {
-        console.error('Failed to auto-generate expense:', (r as PromiseRejectedResult).reason)
+        console.error('Failed to auto-generate recurring transaction:', (r as PromiseRejectedResult).reason)
       })
 
-      // Refresh expenses list to show newly added items
       if (generatedCount > 0) {
         await refreshExpenses()
       }
@@ -265,12 +264,9 @@ export function useRecurringExpenses() {
     }
   }
 
-  // Initialize watchers only once
   if (!watchersInitialized) {
     watchersInitialized = true
 
-    // Only handle logout cleanup.
-    // Login fetch is orchestrated by App.vue to avoid duplicate calls.
     watch(isAuthenticated, (authenticated) => {
       if (!authenticated) {
         recurringExpenses.value = []

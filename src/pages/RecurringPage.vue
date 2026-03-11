@@ -3,9 +3,9 @@
     <!-- Header with Add Button -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-xl font-bold text-white">Spese Ricorrenti</h1>
+        <h1 class="text-xl font-bold text-white">Transazioni Ricorrenti</h1>
         <p class="text-gray-400 text-sm">
-          {{ recurringExpenses.length }} {{ recurringExpenses.length === 1 ? 'spesa configurata' : 'spese configurate' }}
+          {{ recurringExpenses.length }} {{ recurringExpenses.length === 1 ? 'configurata' : 'configurate' }}
         </p>
       </div>
       <button
@@ -26,21 +26,22 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
       </div>
-      <p class="text-gray-400 mb-1">Nessuna spesa ricorrente</p>
-      <p class="text-gray-500 text-sm">Configura spese che si ripetono ogni mese</p>
+      <p class="text-gray-400 mb-1">Nessuna transazione ricorrente</p>
+      <p class="text-gray-500 text-sm">Configura spese o entrate che si ripetono ogni mese</p>
     </div>
 
-    <!-- Recurring Expenses List -->
+    <!-- Recurring List -->
     <div v-else class="space-y-3">
       <div
         v-for="item in recurringExpenses"
         :key="item.id"
         class="flex items-center gap-3 p-4 bg-gray-800 rounded-2xl"
       >
-        <!-- Category Icon -->
+        <!-- Category Icon — clickable to open edit -->
         <div
-          class="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0"
+          class="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 cursor-pointer active:opacity-70 transition-opacity"
           :style="{ backgroundColor: item.categoryColor }"
+          @click="$emit('edit-recurring', item)"
         >
           {{ item.categoryIcon }}
         </div>
@@ -58,9 +59,15 @@
           </p>
         </button>
 
-        <!-- Amount -->
-        <p class="text-white font-semibold whitespace-nowrap mr-2" :class="{ 'opacity-50': !item.enabled }">
-          {{ formatAmount(item.amount) }}
+        <!-- Amount — color-coded by type -->
+        <p
+          class="font-semibold whitespace-nowrap mr-2"
+          :class="[
+            item.enabled ? '' : 'opacity-50',
+            item.type === 'income' ? 'text-emerald-400' : 'text-red-400'
+          ]"
+        >
+          {{ item.type === 'income' ? '+' : '-' }}{{ formatAmount(item.amount) }}
         </p>
 
         <!-- Enable/Disable Toggle -->
@@ -84,7 +91,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <p class="text-gray-400 text-sm">
-          Le spese ricorrenti vengono aggiunte automaticamente quando apri l'app nel giorno configurato.
+          Le transazioni ricorrenti vengono aggiunte automaticamente quando apri l'app nel giorno configurato.
         </p>
       </div>
     </div>

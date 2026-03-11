@@ -61,7 +61,7 @@
           </svg>
         </div>
         <div class="flex-1">
-          <p class="text-white font-medium">Esporta spese</p>
+          <p class="text-white font-medium">Esporta transazioni</p>
           <p class="text-gray-400 text-sm">Scarica CSV di {{ displayMonthYear }}</p>
         </div>
         <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -454,19 +454,21 @@ const accountCreatedDate = computed(() => {
 function handleExport() {
   const list = expenses.value
   if (list.length === 0) {
-    showFeedback('Nessuna spesa da esportare per questo mese', 'error')
+    showFeedback('Nessuna transazione da esportare per questo mese', 'error')
     return
   }
 
   // Build CSV
-  const header = 'Data,Descrizione,Categoria,Importo'
+  const header = 'Data,Tipo,Descrizione,Categoria,Importo'
   const rows = [...list]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(e => {
       const cat = getCategoryConfig(e.category)
       const desc = e.description.replace(/"/g, '""')
       const catLabel = (cat.label as string).replace(/"/g, '""')
-      return `${e.date},"${desc}","${catLabel}",${e.amount.toFixed(2)}`
+      const tipo = e.type === 'income' ? 'Entrata' : 'Spesa'
+      const signedAmount = e.type === 'income' ? e.amount.toFixed(2) : (-e.amount).toFixed(2)
+      return `${e.date},"${tipo}","${desc}","${catLabel}",${signedAmount}`
     })
 
   const csv = [header, ...rows].join('\n')
