@@ -16,7 +16,7 @@
     <!-- FAB button (centered in the notch) -->
     <button
       @click="$emit('fab-click')"
-      class="absolute left-1/2 -translate-x-1/2 -top-4 w-14 h-14 bg-teal-400 rounded-full flex items-center justify-center shadow-lg shadow-teal-400/30 active:scale-95 transition-transform z-10"
+      class="absolute left-1/2 -translate-x-1/2 -top-4 w-14 h-14 bg-teal-400 rounded-full flex items-center justify-center shadow-lg shadow-teal-400/30 active:scale-95 transition-transform z-20"
     >
       <svg class="w-7 h-7 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />

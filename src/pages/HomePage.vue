@@ -11,10 +11,16 @@
       <p class="text-gray-400 text-sm">Saldo di {{ displayMonth }}</p>
 
       <!-- Income / Expense breakdown -->
-      <div v-if="expenses.length > 0" class="flex justify-center gap-4 mt-2">
-        <span class="text-xs text-emerald-400">+{{ formatAmount(totalIncome) }}</span>
-        <span class="text-xs text-gray-600">·</span>
-        <span class="text-xs text-red-400">-{{ formatAmount(totalExpenses) }}</span>
+      <div v-if="expenses.length > 0" class="flex justify-center items-stretch mt-3 gap-0">
+        <div class="flex-1 flex flex-col items-center gap-0.5">
+          <span class="text-[10px] font-semibold tracking-widest text-gray-500 uppercase">Spese</span>
+          <span class="text-base font-semibold text-red-400">-{{ formatAmount(totalExpenses) }}</span>
+        </div>
+        <div class="w-px bg-gray-700 mx-4 self-stretch" />
+        <div class="flex-1 flex flex-col items-center gap-0.5">
+          <span class="text-[10px] font-semibold tracking-widest text-gray-500 uppercase">Entrate</span>
+          <span class="text-base font-semibold text-emerald-400">+{{ formatAmount(totalIncome) }}</span>
+        </div>
       </div>
     </div>
 
@@ -32,8 +38,28 @@
       <p class="text-gray-500 text-sm">Premi + per aggiungere una transazione</p>
     </div>
 
-    <!-- Sort Control -->
-    <div v-if="expenses.length > 0" class="flex items-center justify-end mb-2 relative">
+    <!-- Sort + Filter Controls -->
+    <div v-if="expenses.length > 0" class="flex items-center justify-between mb-2 relative">
+      <!-- Type Filter Pills -->
+      <div class="flex items-center gap-1">
+        <button
+          @click="typeFilter = 'all'"
+          class="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
+          :class="typeFilter === 'all' ? 'bg-gray-600 text-white' : 'text-gray-500 active:bg-gray-800'"
+        >Tutti</button>
+        <button
+          @click="typeFilter = 'expense'"
+          class="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
+          :class="typeFilter === 'expense' ? 'bg-red-400/20 text-red-400' : 'text-gray-500 active:bg-gray-800'"
+        >Spese</button>
+        <button
+          @click="typeFilter = 'income'"
+          class="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
+          :class="typeFilter === 'income' ? 'bg-emerald-400/20 text-emerald-400' : 'text-gray-500 active:bg-gray-800'"
+        >Entrate</button>
+      </div>
+
+      <!-- Sort Button -->
       <button
         @click="sortDropdownOpen = !sortDropdownOpen"
         class="flex items-center gap-1.5 text-gray-400 text-xs px-2 py-1 rounded-lg active:bg-gray-800 transition-colors"
@@ -72,6 +98,11 @@
 
     <!-- Dropdown backdrop -->
     <div v-if="sortDropdownOpen" class="fixed inset-0 z-0" @click="sortDropdownOpen = false" />
+
+    <!-- No results for active filter -->
+    <p v-if="expenses.length > 0 && localSorted.length === 0" class="text-center text-gray-500 text-sm py-8">
+      Nessuna {{ typeFilter === 'expense' ? 'spesa' : 'entrata' }} questo mese
+    </p>
 
     <!-- Transaction List -->
     <div v-if="localSorted.length > 0" class="space-y-3">
@@ -119,6 +150,10 @@ const { displayMonth } = useSelectedMonth()
 const { expenses, balance, totalExpenses, totalIncome, formatDate } = useExpenses()
 const { formatAmount } = useCurrency()
 
+// Type filter
+type TypeFilter = 'all' | 'expense' | 'income'
+const typeFilter = ref<TypeFilter>('all')
+
 // Sorting
 type SortMode = 'date-desc' | 'date-asc' | 'price-desc' | 'price-asc'
 const sortMode = ref<SortMode>('date-desc')
@@ -141,7 +176,10 @@ function selectSortMode(mode: SortMode) {
 }
 
 const localSorted = computed(() => {
-  const list = [...expenses.value]
+  const filtered = typeFilter.value === 'all'
+    ? [...expenses.value]
+    : expenses.value.filter(e => e.type === typeFilter.value)
+  const list = filtered
   switch (sortMode.value) {
     case 'date-desc':
       return list.sort((a, b) => b.date.localeCompare(a.date))
