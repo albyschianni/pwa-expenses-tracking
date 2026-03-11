@@ -119,7 +119,6 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useRegisterSW } from 'virtual:pwa-register/vue'
 import AppHeader from "./components/AppHeader.vue"
 import TabBar from "./components/TabBar.vue"
 import MonthPicker from "./components/MonthPicker.vue"
@@ -138,7 +137,11 @@ import { useAuth } from "./composables/useAuth"
 import { useRecurringExpenses, type RecurringExpense } from "./composables/useRecurringExpenses"
 
 // Auto-reload when a new service worker takes control (new deployment)
-useRegisterSW({ onUpdated: () => window.location.reload() })
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload()
+  })
+}
 
 const { addExpense, updateExpense, deleteExpense, fetchExpenses } = useExpenses()
 const { isAuthenticated, loading: authLoading } = useAuth()

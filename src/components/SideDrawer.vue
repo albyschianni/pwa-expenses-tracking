@@ -43,7 +43,7 @@
 
         <!-- Footer -->
         <div class="p-4 border-t border-gray-700">
-          <p class="text-gray-500 text-xs text-center">Expense Tracker v1.5</p>
+          <p class="text-gray-500 text-xs text-center">Expense Tracker v1.5.1</p>
         </div>
       </div>
     </Transition>
