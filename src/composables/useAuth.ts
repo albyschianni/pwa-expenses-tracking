@@ -180,6 +180,22 @@ export function useAuth() {
     }
   }
 
+  async function deleteAccount() {
+    error.value = null
+    loading.value = true
+
+    try {
+      const { error: fnError } = await supabase.functions.invoke('delete-account')
+      if (fnError) throw fnError
+      await supabase.auth.signOut()
+    } catch (e: any) {
+      error.value = e.message || 'Account deletion failed'
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   function clearError() {
     error.value = null
   }
@@ -198,6 +214,7 @@ export function useAuth() {
     resetPassword,
     updateProfile,
     updatePassword,
+    deleteAccount,
     clearError,
   }
 }
