@@ -69,8 +69,10 @@
               required
               autocomplete="email"
               placeholder="nome@email.com"
+              @blur="forgotEmailTouched = true"
               class="w-full bg-gray-800 text-white rounded-xl py-3 px-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
             />
+            <p v-if="forgotEmailError" class="text-red-400 text-xs mt-1.5">{{ forgotEmailError }}</p>
           </div>
 
           <div v-if="errorMessage" class="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
@@ -83,7 +85,7 @@
 
           <button
             type="submit"
-            :disabled="forgotLoading || !!successMessage"
+            :disabled="isForgotSubmitDisabled"
             class="w-full bg-teal-400 text-gray-900 font-semibold py-3 px-4 rounded-xl disabled:opacity-50 active:bg-teal-500 transition-colors flex items-center justify-center gap-2"
           >
             <svg v-if="forgotLoading" class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -216,7 +218,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
 const { signIn, signUp, signInWithGoogle, resetPassword, loading } = useAuth()
@@ -230,9 +232,27 @@ const successMessage = ref('')
 const showConfirmation = ref(false)
 const forgotLoading = ref(false)
 
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const forgotEmailTouched = ref(false)
+const forgotEmailError = computed(() => {
+  if (!forgotEmailTouched.value || !email.value) return ''
+  return emailRegex.test(email.value) ? '' : 'Formato email non valido'
+})
+const isForgotSubmitDisabled = computed(() => {
+  return forgotLoading.value || !email.value || !emailRegex.test(email.value)
+})
+
+// Re-enable submit when email changes after a successful send
+watch(email, () => {
+  if (mode.value === 'forgot' && successMessage.value) {
+    successMessage.value = ''
+  }
+})
+
 function clearMessages() {
   errorMessage.value = ''
   successMessage.value = ''
+  forgotEmailTouched.value = false
 }
 
 function dismissConfirmation() {
@@ -273,7 +293,7 @@ async function handleForgotPassword() {
 
   try {
     await resetPassword(email.value)
-    successMessage.value = 'Email inviata! Controlla la tua casella di posta.'
+    successMessage.value = 'Email inviata! Controlla la tua casella di posta. Se non la trovi, controlla la cartella spam.'
   } catch (e: any) {
     errorMessage.value = translateError(e.message)
   } finally {
@@ -300,6 +320,7 @@ function translateError(message: string): string {
     'Unable to validate email address: invalid format': 'Formato email non valido',
     'Request rate limit reached': 'Troppi tentativi. Riprova tra qualche minuto.',
     'email rate limit exceeded': 'Troppi tentativi. Riprova tra qualche minuto.',
+    'Email non trovata': 'Nessun account trovato con questa email.',
   }
   if (translations[message]) return translations[message]
   if (message.toLowerCase().includes('rate') || message.toLowerCase().includes('limit') || message.toLowerCase().includes('429'))

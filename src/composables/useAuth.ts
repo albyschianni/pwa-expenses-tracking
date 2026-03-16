@@ -113,6 +113,14 @@ export function useAuth() {
     // Note: don't set global loading=true here — it unmounts AuthPage via v-if chain in App.vue
 
     try {
+      // Check if email exists in DB before sending reset email
+      const { data: exists, error: rpcError } = await supabase.rpc('check_email_exists', {
+        lookup_email: email,
+      })
+
+      if (rpcError) throw rpcError
+      if (!exists) throw new Error('Email non trovata')
+
       const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       })
