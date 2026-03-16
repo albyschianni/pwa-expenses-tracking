@@ -2,11 +2,20 @@ import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
 
+// Check if this page load comes from a password recovery email link
+// Must run before Supabase processes the URL hash
+function detectRecoveryFromUrl(): boolean {
+  const hash = new URLSearchParams(window.location.hash.substring(1))
+  const search = new URLSearchParams(window.location.search)
+  return hash.get('type') === 'recovery' || search.get('type') === 'recovery'
+}
+
 // Shared reactive state (singleton)
 const user = ref<User | null>(null)
 const session = ref<Session | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const isPasswordRecovery = ref(detectRecoveryFromUrl())
 
 // Initialize auth state listener (called once)
 let initialized = false
@@ -15,18 +24,23 @@ async function initAuth() {
   if (initialized) return
   initialized = true
 
-  // Get initial session
-  const { data } = await supabase.auth.getSession()
-  session.value = data.session
-  user.value = data.session?.user ?? null
-  loading.value = false
-
-  // Listen for auth changes
+  // Set up listener FIRST so we catch PASSWORD_RECOVERY from URL hash
+  // before getSession() processes the token
   supabase.auth.onAuthStateChange((_event, newSession) => {
+    if (_event === 'PASSWORD_RECOVERY') {
+      isPasswordRecovery.value = true
+    }
+    // Note: don't reset isPasswordRecovery on SIGNED_IN — Supabase fires it
+    // right after PASSWORD_RECOVERY. It's reset manually in ResetPasswordPage
+    // after the password is successfully updated.
     session.value = newSession
     user.value = newSession?.user ?? null
     loading.value = false
   })
+
+  // getSession() triggers URL hash processing and fires onAuthStateChange
+  // with INITIAL_SESSION (and PASSWORD_RECOVERY if recovery token present)
+  await supabase.auth.getSession()
 }
 
 // Start initialization immediately
@@ -96,7 +110,7 @@ export function useAuth() {
 
   async function resetPassword(email: string) {
     error.value = null
-    loading.value = true
+    // Note: don't set global loading=true here — it unmounts AuthPage via v-if chain in App.vue
 
     try {
       const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
@@ -107,8 +121,6 @@ export function useAuth() {
     } catch (e: any) {
       error.value = e.message || 'Password reset failed'
       throw e
-    } finally {
-      loading.value = false
     }
   }
 
@@ -206,6 +218,7 @@ export function useAuth() {
     loading,
     error,
     isAuthenticated,
+    isPasswordRecovery,
     displayName,
     signUp,
     signIn,

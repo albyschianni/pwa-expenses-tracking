@@ -10,6 +10,9 @@
     </div>
   </div>
 
+  <!-- Password Recovery Page -->
+  <ResetPasswordPage v-else-if="isPasswordRecovery" />
+
   <!-- Auth Page -->
   <AuthPage v-else-if="!isAuthenticated" />
 
@@ -130,6 +133,7 @@ import AvatarViewer from "./components/AvatarViewer.vue"
 import HomePage from "./pages/HomePage.vue"
 import GraphicsPage from "./pages/GraphicsPage.vue"
 import AuthPage from "./pages/AuthPage.vue"
+import ResetPasswordPage from "./pages/ResetPasswordPage.vue"
 import SettingsPage from "./pages/SettingsPage.vue"
 import RecurringPage from "./pages/RecurringPage.vue"
 import { useExpenses, type Expense } from "./composables/useExpenses"
@@ -144,7 +148,7 @@ if ('serviceWorker' in navigator) {
 }
 
 const { addExpense, updateExpense, deleteExpense, fetchExpenses } = useExpenses()
-const { isAuthenticated, loading: authLoading } = useAuth()
+const { isAuthenticated, isPasswordRecovery, loading: authLoading } = useAuth()
 const {
   addRecurringExpense,
   updateRecurringExpense,
