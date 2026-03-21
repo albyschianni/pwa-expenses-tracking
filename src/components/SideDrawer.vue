@@ -29,21 +29,24 @@
         </div>
 
         <!-- Content -->
-        <div class="flex-1 flex flex-col items-center justify-center p-6">
-          <div class="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center mb-4">
-            <svg class="w-8 h-8 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
+        <div class="flex-1 p-4 space-y-2">
+          <button
+            @click="$emit('navigate', 'wallets'); $emit('close')"
+            class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-700/50 active:bg-gray-700 transition-colors text-left"
+          >
+            <svg class="w-6 h-6 text-teal-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
-          </div>
-          <p class="text-white font-medium text-lg mb-2">Work in Progress</p>
-          <p class="text-gray-400 text-sm text-center">
-            Nuove funzionalita in arrivo!
-          </p>
+            <div>
+              <p class="text-white font-medium">Conti Condivisi</p>
+              <p class="text-gray-400 text-xs">Gestisci wallet condivisi</p>
+            </div>
+          </button>
         </div>
 
         <!-- Footer -->
         <div class="p-4 border-t border-gray-700">
-          <p class="text-gray-500 text-xs text-center">Expense Tracker v1.5.1</p>
+          <p class="text-gray-500 text-xs text-center">Expense Tracker v{{ appVersion }}</p>
         </div>
       </div>
     </Transition>
@@ -51,6 +54,8 @@
 </template>
 
 <script setup>
+import { APP_VERSION } from '../constants/version'
+
 defineProps({
   open: {
     type: Boolean,
@@ -58,7 +63,9 @@ defineProps({
   }
 })
 
-defineEmits(['close'])
+defineEmits(['close', 'navigate'])
+
+const appVersion = APP_VERSION
 </script>
 
 <style scoped>

@@ -1,0 +1,14 @@
+[
+  {
+    "version": "1.8.0",
+    "date": "2026-03-21",
+    "title": "Categorie Personalizzate & Aggiornamenti",
+    "highlights": [
+      { "icon": "🏷️", "text": "Crea, modifica e archivia categorie personalizzate" },
+      { "icon": "🎨", "text": "Scegli icona e colore per ogni categoria" },
+      { "icon": "🔄", "text": "Riordina le categorie personalizzate" },
+      { "icon": "📋", "text": "Modale 'Novità' dopo ogni aggiornamento" },
+      { "icon": "⚙️", "text": "Versione app aggiornata automaticamente" }
+    ]
+  }
+]

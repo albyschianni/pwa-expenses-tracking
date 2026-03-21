@@ -46,6 +46,15 @@
       </div>
 
       <div
+        v-else-if="activeTab === 'wallets'"
+        key="wallets"
+        ref="walletsScrollRef"
+        class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
+      >
+        <WalletsPage />
+      </div>
+
+      <div
         v-else-if="activeTab === 'recurring'"
         key="recurring"
         ref="recurringScrollRef"
@@ -110,6 +119,7 @@
     <SideDrawer
       :open="menuOpen"
       @close="menuOpen = false"
+      @navigate="activeTab = $event"
     />
 
     <!-- AVATAR VIEWER -->
@@ -117,6 +127,9 @@
       :open="avatarViewerOpen"
       @close="avatarViewerOpen = false"
     />
+
+    <!-- WHAT'S NEW MODAL -->
+    <WhatsNewModal />
   </div>
 </template>
 
@@ -136,9 +149,13 @@ import AuthPage from "./pages/AuthPage.vue"
 import ResetPasswordPage from "./pages/ResetPasswordPage.vue"
 import SettingsPage from "./pages/SettingsPage.vue"
 import RecurringPage from "./pages/RecurringPage.vue"
+import WalletsPage from "./pages/WalletsPage.vue"
 import { useExpenses, type Expense } from "./composables/useExpenses"
 import { useAuth } from "./composables/useAuth"
 import { useRecurringExpenses, type RecurringExpense } from "./composables/useRecurringExpenses"
+import { useSharedWallets } from "./composables/useSharedWallets"
+import WhatsNewModal from "./components/WhatsNewModal.vue"
+import { useWhatsNew } from "./composables/useWhatsNew"
 
 // Auto-reload when a new service worker takes control (new deployment)
 if ('serviceWorker' in navigator) {
@@ -149,6 +166,8 @@ if ('serviceWorker' in navigator) {
 
 const { addExpense, updateExpense, deleteExpense, fetchExpenses } = useExpenses()
 const { isAuthenticated, isPasswordRecovery, loading: authLoading } = useAuth()
+const { activeWallet, addWalletTransaction } = useSharedWallets()
+const { checkForUpdates } = useWhatsNew()
 const {
   addRecurringExpense,
   updateRecurringExpense,
@@ -163,6 +182,7 @@ const activeTab = ref('home')
 // Scroll refs for each tab
 const homeScrollRef = ref<HTMLElement | null>(null)
 const graphicScrollRef = ref<HTMLElement | null>(null)
+const walletsScrollRef = ref<HTMLElement | null>(null)
 const recurringScrollRef = ref<HTMLElement | null>(null)
 const settingsScrollRef = ref<HTMLElement | null>(null)
 
@@ -171,6 +191,7 @@ watch(activeTab, () => {
   const scrollRefs: Record<string, typeof homeScrollRef> = {
     home: homeScrollRef,
     graphic: graphicScrollRef,
+    wallets: walletsScrollRef,
     recurring: recurringScrollRef,
     settings: settingsScrollRef,
   }
@@ -203,6 +224,7 @@ watch(isAuthenticated, async (authenticated) => {
   if (authenticated) {
     await Promise.all([fetchExpenses(), fetchRecurringExpenses()])
     await processAutoGeneration()
+    checkForUpdates()
   }
 }, { immediate: true })
 
@@ -243,6 +265,9 @@ async function handleSaveExpense(data: { description: string; date: string; amou
   try {
     if (expenseToEdit.value) {
       await updateExpense(expenseToEdit.value.id, data)
+    } else if (activeWallet.value) {
+      // Shared wallet mode: add to the active wallet
+      await addWalletTransaction(activeWallet.value.id, data)
     } else {
       await addExpense(data)
     }

@@ -14,6 +14,7 @@ export interface DbExpense {
   date: string
   category_id: string
   transaction_type: 'expense' | 'income' | null
+  shared_wallet_id: string | null
   created_at: string
   updated_at: string
 }
@@ -25,6 +26,28 @@ export interface DbCategory {
   color: string
   user_id: string | null
   is_default: boolean
+  sort_order: number
+  is_active: boolean
+  transaction_type: 'expense' | 'income'
+}
+
+export interface DbSharedWallet {
+  id: string
+  name: string
+  created_by: string
+  currency: string
+  is_deleted: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface DbSharedWalletMember {
+  id: string
+  wallet_id: string
+  user_id: string
+  role: 'owner' | 'member'
+  is_active: boolean
+  joined_at: string
 }
 
 export interface DbRecurringExpense {
@@ -37,6 +60,7 @@ export interface DbRecurringExpense {
   enabled: boolean
   last_generated_date: string | null
   transaction_type: 'expense' | 'income' | null
+  shared_wallet_id: string | null
   created_at: string
   updated_at: string
 }

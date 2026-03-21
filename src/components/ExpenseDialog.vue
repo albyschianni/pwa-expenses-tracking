@@ -134,10 +134,9 @@
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useCategories } from '../composables/useCategories'
 import { useCurrency } from '../composables/useCurrency'
-import { INCOME_CATEGORIES } from '../composables/useExpenses'
 
 const { symbol } = useCurrency()
-const { visibleCategories } = useCategories()
+const { expenseCategories, incomeCategories } = useCategories()
 
 const props = defineProps({
   open: Boolean,
@@ -162,7 +161,7 @@ const form = reactive({
 
 // Categories based on current type
 const activeCategories = computed(() => {
-  return form.type === 'income' ? INCOME_CATEGORIES : visibleCategories.value
+  return form.type === 'income' ? incomeCategories.value : expenseCategories.value
 })
 
 const isEditing = computed(() => props.expense !== null)
@@ -188,7 +187,7 @@ const isValid = computed(() => {
 function setType(type) {
   if (form.type === type) return
   form.type = type
-  const cats = type === 'income' ? INCOME_CATEGORIES : visibleCategories.value
+  const cats = type === 'income' ? incomeCategories.value : expenseCategories.value
   form.category = cats[0]?.id || ''
 }
 
@@ -208,7 +207,7 @@ watch(() => props.open, (isOpen) => {
       form.date = new Date().toISOString().split('T')[0]
       form.amount = ''
       form.type = 'expense'
-      form.category = visibleCategories.value[0]?.id || 'Altro'
+      form.category = expenseCategories.value[0]?.id || 'Altro'
     }
     // Focus amount input after animation
     nextTick(() => {

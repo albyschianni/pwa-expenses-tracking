@@ -152,11 +152,10 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useCategories } from '../composables/useCategories'
-import { INCOME_CATEGORIES } from '../composables/useExpenses'
 import type { RecurringExpense } from '../composables/useRecurringExpenses'
 import { useCurrency } from '../composables/useCurrency'
 
-const { visibleCategories } = useCategories()
+const { expenseCategories, incomeCategories } = useCategories()
 const { symbol } = useCurrency()
 
 const props = defineProps<{
@@ -181,7 +180,7 @@ const form = reactive({
 })
 
 const activeCategories = computed(() =>
-  form.type === 'income' ? INCOME_CATEGORIES : visibleCategories.value
+  form.type === 'income' ? incomeCategories.value : expenseCategories.value
 )
 
 const isEditing = computed(() => props.recurringExpense !== null)
@@ -207,7 +206,7 @@ const isValid = computed(() => {
 function setType(type: 'expense' | 'income') {
   if (form.type === type) return
   form.type = type
-  const cats = type === 'income' ? INCOME_CATEGORIES : visibleCategories.value
+  const cats = type === 'income' ? incomeCategories.value : expenseCategories.value
   form.category = cats[0]?.id || ''
 }
 
@@ -223,7 +222,7 @@ watch(() => props.open, (isOpen) => {
       form.description = ''
       form.amount      = ''
       form.type        = 'expense'
-      form.category    = visibleCategories.value[0]?.id || 'Altro'
+      form.category    = expenseCategories.value[0]?.id || 'Altro'
       form.dayOfMonth  = '1'
     }
     nextTick(() => {

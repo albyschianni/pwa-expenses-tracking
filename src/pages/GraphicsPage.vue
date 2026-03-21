@@ -1,7 +1,7 @@
 <template>
   <div class="px-4 py-6">
     <!-- Empty State -->
-    <div v-if="expenses.length === 0" class="text-center py-12">
+    <div v-if="displayExpenses.length === 0" class="text-center py-12">
       <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
         <svg class="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
@@ -17,22 +17,38 @@
       <!-- Balance Summary Row -->
       <div class="grid grid-cols-3 gap-2">
         <div class="bg-gray-800 rounded-2xl p-3 text-center">
-          <p class="text-emerald-400 font-bold text-base">+{{ formatCurrency(totalIncome) }}</p>
+          <p class="text-emerald-400 font-bold text-base">+{{ formatCurrency(displayTotalIncome) }}</p>
           <p class="text-gray-500 text-xs mt-0.5">Entrate</p>
         </div>
         <div class="bg-gray-800 rounded-2xl p-3 text-center">
           <p
             class="font-bold text-base"
-            :class="balance >= 0 ? 'text-emerald-400' : 'text-red-400'"
+            :class="displayBalance >= 0 ? 'text-emerald-400' : 'text-red-400'"
           >
-            {{ balance >= 0 ? '+' : '' }}{{ formatCurrency(balance) }}
+            {{ displayBalance >= 0 ? '+' : '' }}{{ formatCurrency(displayBalance) }}
           </p>
           <p class="text-gray-500 text-xs mt-0.5">Saldo</p>
         </div>
         <div class="bg-gray-800 rounded-2xl p-3 text-center">
-          <p class="text-red-400 font-bold text-base">-{{ formatCurrency(totalExpenses) }}</p>
+          <p class="text-red-400 font-bold text-base">-{{ formatCurrency(displayTotalExpenses) }}</p>
           <p class="text-gray-500 text-xs mt-0.5">Uscite</p>
         </div>
+      </div>
+
+      <!-- User Filter (shared wallet only) -->
+      <div v-if="activeWallet && walletMembers.length > 0" class="flex items-center gap-1.5 overflow-x-auto pb-1">
+        <button
+          @click="graphUserFilter = null"
+          class="text-xs px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap shrink-0"
+          :class="graphUserFilter === null ? 'bg-teal-400/20 text-teal-400' : 'bg-gray-800 text-gray-400 active:bg-gray-700'"
+        >Tutti</button>
+        <button
+          v-for="m in walletMembers"
+          :key="m.userId"
+          @click="graphUserFilter = m.userId"
+          class="text-xs px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap shrink-0"
+          :class="graphUserFilter === m.userId ? 'bg-teal-400/20 text-teal-400' : 'bg-gray-800 text-gray-400 active:bg-gray-700'"
+        >{{ m.displayName || m.email || 'Utente' }}</button>
       </div>
 
       <!-- Type Toggle -->
@@ -150,19 +166,42 @@ import {
 } from 'chart.js'
 import { useExpenses } from '../composables/useExpenses'
 import { useCurrency } from '../composables/useCurrency'
+import { useSharedWallets } from '../composables/useSharedWallets'
 
 ChartJS.register(ArcElement, Tooltip)
 
 const { expenses, balance, totalExpenses, totalIncome, getCategoryConfig } = useExpenses()
 const { formatAmount } = useCurrency()
+const { activeWallet, walletMembers, walletTransactions, walletBalance, walletTotalExpenses, walletTotalIncome } = useSharedWallets()
+
+// User filter for shared wallet charts
+const graphUserFilter = ref<string | null>(null)
+
+// Data source: personal or shared wallet
+const displayExpenses = computed(() =>
+  activeWallet.value ? walletTransactions.value : expenses.value
+)
+const displayBalance = computed(() =>
+  activeWallet.value ? walletBalance.value : balance.value
+)
+const displayTotalExpenses = computed(() =>
+  activeWallet.value ? walletTotalExpenses.value : totalExpenses.value
+)
+const displayTotalIncome = computed(() =>
+  activeWallet.value ? walletTotalIncome.value : totalIncome.value
+)
 
 // Toggle: which type to chart
 const chartType = ref<'expense' | 'income'>('expense')
 
-// Transactions filtered by selected type
-const filteredExpenses = computed(() =>
-  expenses.value.filter(e => e.type === chartType.value)
-)
+// Transactions filtered by selected type (and user if shared wallet)
+const filteredExpenses = computed(() => {
+  let source = displayExpenses.value
+  if (activeWallet.value && graphUserFilter.value) {
+    source = source.filter((e: any) => e.userId === graphUserFilter.value)
+  }
+  return source.filter(e => e.type === chartType.value)
+})
 
 const filteredTotal = computed(() =>
   filteredExpenses.value.reduce((sum, e) => sum + e.amount, 0)
@@ -176,8 +215,9 @@ const filteredAverage = computed(() => {
 // Group by category for selected type
 const categoryTotals = computed(() => {
   const totals = new Map<string, number>()
-  filteredExpenses.value.forEach(e => {
-    totals.set(e.category, (totals.get(e.category) || 0) + e.amount)
+  filteredExpenses.value.forEach((e: any) => {
+    const catId = e.category || e.category_id
+    totals.set(catId, (totals.get(catId) || 0) + e.amount)
   })
   return totals
 })

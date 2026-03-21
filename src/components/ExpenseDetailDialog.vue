@@ -66,6 +66,10 @@
                 {{ categoryLabel }}
               </span>
             </div>
+            <div v-if="expense.userDisplayName || expense.userEmail" class="flex justify-between items-center py-3 border-b border-gray-700">
+              <span class="text-gray-400">Aggiunta da</span>
+              <span class="text-white font-medium">{{ expense.userDisplayName || expense.userEmail }}</span>
+            </div>
           </div>
 
           <!-- Actions -->
@@ -130,7 +134,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { CATEGORIES, INCOME_CATEGORIES } from '../composables/useExpenses'
+import { getCategoryConfig } from '../composables/useExpenses'
 import { useCurrency } from '../composables/useCurrency'
 
 const props = defineProps({
@@ -157,9 +161,8 @@ const isIncome = computed(() => props.expense?.type === 'income')
 
 const categoryLabel = computed(() => {
   if (!props.expense) return ''
-  const allCats = [...CATEGORIES, ...INCOME_CATEGORIES]
-  const cat = allCats.find(c => c.id === props.expense.category)
-  return cat?.label || props.expense.category
+  const cat = getCategoryConfig(props.expense.category)
+  return cat.label
 })
 
 const formattedDate = computed(() => {

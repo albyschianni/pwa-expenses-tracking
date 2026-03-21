@@ -191,6 +191,12 @@
           </button>
         </div>
 
+        <!-- Privacy Policy notice (visible before registration — nLPD) -->
+        <p v-if="mode === 'signup'" class="mt-3 text-gray-500 text-xs text-center leading-relaxed">
+          Registrandoti accetti la nostra
+          <button @click="showAuthPrivacy = true" class="text-teal-400 underline">Privacy Policy</button>.
+        </p>
+
         <!-- Divider -->
         <div class="flex items-center gap-4 my-6">
           <div class="flex-1 h-px bg-gray-700" />
@@ -214,6 +220,43 @@
         </button>
       </div>
     </div>
+
+    <!-- Privacy Policy Sheet (pre-registration, nLPD) -->
+    <Teleport to="body">
+      <Transition name="overlay">
+        <div
+          v-if="showAuthPrivacy"
+          class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+          @click="showAuthPrivacy = false"
+        />
+      </Transition>
+      <Transition name="overlay">
+        <div
+          v-if="showAuthPrivacy"
+          class="fixed inset-x-0 bottom-0 z-50 bg-gray-800 rounded-t-3xl max-h-[80vh] flex flex-col"
+        >
+          <div class="p-6 pb-0">
+            <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
+            <h3 class="text-white text-xl font-bold mb-2">Privacy Policy</h3>
+          </div>
+          <div class="flex-1 overflow-y-auto px-6 pb-8 text-gray-300 text-sm leading-relaxed space-y-4">
+            <p class="text-gray-500 text-xs">Ultimo aggiornamento: marzo 2026</p>
+            <p>SpaceWeb Labs raccoglie solo i dati necessari al funzionamento del servizio: email, password (hashata), transazioni finanziarie e foto profilo (opzionale).</p>
+            <p>I dati sono conservati su server in regione EU (Supabase/AWS, eu-central-1), protetti da crittografia AES-256 a riposo e TLS in transito. Non utilizziamo cookie di tracciamento, analytics o pubblicità.</p>
+            <p>Hai diritto di accesso, rettifica, portabilità (export JSON/CSV) e cancellazione dei tuoi dati in qualsiasi momento dalle Impostazioni dell'app.</p>
+            <p>Per la versione completa, consulta la Privacy Policy nelle Impostazioni dopo la registrazione, oppure contattaci: <span class="text-teal-400">support@expensetracker.app</span></p>
+          </div>
+          <div class="px-6 pb-8">
+            <button
+              @click="showAuthPrivacy = false"
+              class="w-full py-3 bg-teal-400 text-gray-900 rounded-xl font-bold active:bg-teal-500 transition-colors"
+            >
+              Ho capito
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -224,6 +267,7 @@ import { useAuth } from '../composables/useAuth'
 const { signIn, signUp, signInWithGoogle, resetPassword, loading } = useAuth()
 
 const mode = ref<'login' | 'signup' | 'forgot'>('login')
+const showAuthPrivacy = ref(false)
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')

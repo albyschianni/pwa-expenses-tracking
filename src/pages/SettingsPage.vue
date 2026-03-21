@@ -69,6 +69,22 @@
         </svg>
       </button>
 
+      <!-- Export All Data (GDPR) -->
+      <button @click="handleExportAllData" class="w-full flex items-center gap-4 p-4 text-left border-b border-gray-700 active:bg-gray-700 transition-colors">
+        <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+          <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </div>
+        <div class="flex-1">
+          <p class="text-white font-medium">Esporta tutti i dati</p>
+          <p class="text-gray-400 text-sm">Scarica tutti i tuoi dati in JSON (GDPR)</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
       <!-- Privacy Policy -->
       <button
         @click="privacySheetOpen = true"
@@ -136,45 +152,59 @@
       <Transition name="slide-up">
         <div
           v-if="categoriesSheetOpen"
-          class="fixed inset-x-0 bottom-0 z-50 bg-gray-800 rounded-t-3xl max-h-[80vh] flex flex-col"
+          class="fixed inset-x-0 bottom-0 z-50 bg-gray-800 rounded-t-3xl max-h-[85vh] flex flex-col"
         >
           <div class="p-6 pb-0">
             <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
             <div class="flex items-center justify-between mb-2">
               <h3 class="text-white text-lg font-semibold">Categorie</h3>
               <button
-                @click="resetToDefaults"
-                class="text-gray-400 text-sm active:text-white transition-colors"
+                @click="showAddCategoryForm = true"
+                class="text-teal-400 text-sm font-medium active:text-teal-300 transition-colors"
               >
-                Ripristina
+                + Aggiungi
               </button>
             </div>
-            <p class="text-gray-500 text-xs mb-4">Attiva o disattiva le categorie e riordinale.</p>
+            <!-- Type toggle -->
+            <div class="flex bg-gray-700 rounded-xl p-1 mb-4">
+              <button
+                @click="catViewType = 'expense'"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+                :class="catViewType === 'expense' ? 'bg-gray-900 text-red-400 shadow' : 'text-gray-400'"
+              >
+                Spese
+              </button>
+              <button
+                @click="catViewType = 'income'"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+                :class="catViewType === 'income' ? 'bg-gray-900 text-emerald-400 shadow' : 'text-gray-400'"
+              >
+                Entrate
+              </button>
+            </div>
           </div>
 
           <div class="flex-1 overflow-y-auto px-6 pb-8">
             <div class="space-y-1">
               <div
-                v-for="(cat, index) in orderedCategories"
+                v-for="cat in displayedManagedCategories"
                 :key="cat.id"
                 class="flex items-center gap-3 p-3 rounded-xl"
-                :class="cat.visible ? 'bg-gray-700/50' : 'bg-gray-800 opacity-50'"
+                :class="cat.isActive ? 'bg-gray-700/50' : 'bg-gray-800 opacity-40'"
               >
-                <!-- Reorder buttons -->
+                <!-- Reorder buttons (all categories) -->
                 <div class="flex flex-col gap-0.5">
                   <button
-                    @click="moveCategory(cat.id, 'up')"
-                    :disabled="index === 0"
-                    class="w-6 h-6 flex items-center justify-center text-gray-500 disabled:opacity-20 active:text-white transition-colors"
+                    @click="reorderCategory(cat.id, 'up')"
+                    class="w-6 h-6 flex items-center justify-center text-gray-500 active:text-white transition-colors"
                   >
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
                     </svg>
                   </button>
                   <button
-                    @click="moveCategory(cat.id, 'down')"
-                    :disabled="index === orderedCategories.length - 1"
-                    class="w-6 h-6 flex items-center justify-center text-gray-500 disabled:opacity-20 active:text-white transition-colors"
+                    @click="reorderCategory(cat.id, 'down')"
+                    class="w-6 h-6 flex items-center justify-center text-gray-500 active:text-white transition-colors"
                   >
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
@@ -182,28 +212,152 @@
                   </button>
                 </div>
 
-                <!-- Icon + Color dot -->
-                <div class="flex items-center gap-3 flex-1 min-w-0">
-                  <span class="text-xl">{{ cat.icon }}</span>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-white text-sm font-medium truncate">{{ cat.label }}</p>
-                  </div>
+                <!-- Icon -->
+                <span class="text-xl">{{ cat.icon }}</span>
+
+                <!-- Label + system badge -->
+                <div class="flex-1 min-w-0">
+                  <p class="text-white text-sm font-medium truncate">{{ cat.label }}</p>
+                  <p v-if="cat.isSystem" class="text-gray-500 text-xs">Sistema</p>
                 </div>
 
-                <!-- Toggle switch -->
+                <!-- Edit button (custom categories only) -->
                 <button
-                  @click="toggleCategory(cat.id)"
-                  class="relative w-11 h-6 rounded-full transition-colors shrink-0"
-                  :class="cat.visible ? 'bg-teal-400' : 'bg-gray-600'"
+                  v-if="!cat.isSystem"
+                  @click="startEditCategory(cat)"
+                  class="w-8 h-8 flex items-center justify-center text-gray-400 active:text-white transition-colors shrink-0"
                 >
-                  <div
-                    class="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
-                    :class="cat.visible ? 'translate-x-[22px]' : 'translate-x-0.5'"
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+
+                <!-- Color dot -->
+                <div class="w-4 h-4 rounded-full shrink-0" :style="{ backgroundColor: cat.color }" />
+
+                <!-- Enable/disable toggle (iOS-style) -->
+                <button
+                  @click="handleToggleCategory(cat.id, !cat.isActive)"
+                  class="relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0"
+                  :class="cat.isActive ? 'bg-teal-400' : 'bg-gray-600'"
+                >
+                  <span
+                    class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                    :class="cat.isActive ? 'translate-x-5' : 'translate-x-0'"
                   />
                 </button>
               </div>
             </div>
           </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Add/Edit Category Sheet -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showAddCategoryForm"
+          class="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
+          @click="closeAddCategoryForm"
+        />
+      </Transition>
+
+      <Transition name="slide-up">
+        <div
+          v-if="showAddCategoryForm"
+          class="fixed inset-x-0 bottom-0 z-[60] bg-gray-800 rounded-t-3xl p-6 pb-8"
+        >
+          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
+          <h3 class="text-white text-lg font-semibold mb-4">
+            {{ editingCategoryId ? 'Modifica Categoria' : 'Nuova Categoria' }}
+          </h3>
+
+          <!-- Type selector -->
+          <div v-if="!editingCategoryId" class="flex bg-gray-700 rounded-xl p-1 mb-4">
+            <button
+              @click="newCatForm.type = 'expense'"
+              class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+              :class="newCatForm.type === 'expense' ? 'bg-gray-900 text-red-400 shadow' : 'text-gray-400'"
+            >
+              Spesa
+            </button>
+            <button
+              @click="newCatForm.type = 'income'"
+              class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+              :class="newCatForm.type === 'income' ? 'bg-gray-900 text-emerald-400 shadow' : 'text-gray-400'"
+            >
+              Entrata
+            </button>
+          </div>
+
+          <!-- Name -->
+          <div class="mb-4">
+            <label class="block text-gray-400 text-sm mb-2">Nome</label>
+            <input
+              v-model="newCatForm.label"
+              type="text"
+              placeholder="Es: Viaggi"
+              class="w-full bg-gray-700 text-white rounded-xl py-3 px-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
+            />
+          </div>
+
+          <!-- Icon (emoji text input) -->
+          <div class="mb-4">
+            <label class="block text-gray-400 text-sm mb-2">Icona (emoji dalla tastiera)</label>
+            <div class="flex items-center gap-3">
+              <input
+                v-model="newCatForm.icon"
+                type="text"
+                placeholder="Es: 🏖️"
+                class="w-20 bg-gray-700 text-white text-center text-2xl rounded-xl py-3 px-2 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                maxlength="4"
+              />
+              <span v-if="newCatForm.icon" class="text-3xl">{{ newCatForm.icon }}</span>
+              <span v-else class="text-gray-500 text-sm">Inserisci un emoji dalla tastiera</span>
+            </div>
+          </div>
+
+          <!-- Color picker -->
+          <div class="mb-6">
+            <label class="block text-gray-400 text-sm mb-2">Colore</label>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="color in colorOptions"
+                :key="color"
+                @click="newCatForm.color = color"
+                class="w-10 h-10 rounded-full transition-all"
+                :class="newCatForm.color === color ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-800 scale-110' : ''"
+                :style="{ backgroundColor: color }"
+              />
+            </div>
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex gap-2">
+            <button
+              @click="closeAddCategoryForm"
+              class="flex-1 py-3 bg-gray-700 text-gray-300 rounded-xl font-medium active:bg-gray-600 transition-colors"
+            >
+              Annulla
+            </button>
+            <button
+              @click="handleSaveCategory"
+              :disabled="!newCatForm.label.trim() || !newCatForm.icon || !newCatForm.color"
+              class="flex-1 py-3 bg-teal-400 text-gray-900 rounded-xl font-semibold active:bg-teal-500 transition-colors disabled:opacity-40"
+            >
+              {{ editingCategoryId ? 'Salva' : 'Crea' }}
+            </button>
+          </div>
+
+          <!-- Delete button (only when editing a custom category) -->
+          <button
+            v-if="editingCategoryId"
+            @click="handleDeleteCategory(editingCategoryId!)"
+            class="w-full mt-4 py-3 bg-red-500/10 text-red-400 rounded-xl font-semibold active:bg-red-500/20 transition-colors text-center"
+          >
+            Elimina categoria
+          </button>
         </div>
       </Transition>
     </Teleport>
@@ -517,53 +671,197 @@
           </div>
 
           <div class="flex-1 overflow-y-auto px-6 pb-10 space-y-5 text-gray-300 text-sm leading-relaxed">
-            <p class="text-gray-500 text-xs">Ultimo aggiornamento: marzo 2026</p>
+            <!-- Language toggle -->
+            <div class="flex bg-gray-700 rounded-xl p-1">
+              <button
+                @click="privacyLang = 'it'"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+                :class="privacyLang === 'it' ? 'bg-gray-900 text-teal-400 shadow' : 'text-gray-400'"
+              >
+                Italiano
+              </button>
+              <button
+                @click="privacyLang = 'en'"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+                :class="privacyLang === 'en' ? 'bg-gray-900 text-teal-400 shadow' : 'text-gray-400'"
+              >
+                English
+              </button>
+            </div>
 
-            <section>
-              <h4 class="text-white font-semibold mb-1">1. Titolare del trattamento</h4>
-              <p>Il titolare del trattamento dei dati personali è lo sviluppatore dell'applicazione Expense Tracker. Per qualsiasi richiesta: <span class="text-teal-400">support@expensetracker.app</span></p>
-            </section>
+            <p class="text-gray-500 text-xs">{{ privacyLang === 'it' ? 'Ultimo aggiornamento: marzo 2026' : 'Last updated: March 2026' }}</p>
 
-            <section>
-              <h4 class="text-white font-semibold mb-1">2. Dati raccolti</h4>
-              <p>L'app raccoglie esclusivamente i dati che inserisci volontariamente:</p>
-              <ul class="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
-                <li>Indirizzo email e password (per autenticazione)</li>
-                <li>Transazioni finanziarie (importo, descrizione, categoria, data)</li>
-                <li>Transazioni ricorrenti configurate</li>
-                <li>Foto profilo (opzionale)</li>
-              </ul>
-            </section>
+            <!-- Italian -->
+            <template v-if="privacyLang === 'it'">
+              <section>
+                <h4 class="text-white font-semibold mb-1">1. Titolare del trattamento</h4>
+                <p>SpaceWeb Labs, sviluppatore dell'applicazione Expense Tracker. Per qualsiasi richiesta: <span class="text-teal-400">support@expensetracker.app</span></p>
+              </section>
 
-            <section>
-              <h4 class="text-white font-semibold mb-1">3. Finalità del trattamento</h4>
-              <p>I dati sono trattati esclusivamente per fornire il servizio: autenticazione, archiviazione e visualizzazione delle transazioni personali. Non vengono usati per profilazione, marketing o ceduti a terzi.</p>
-            </section>
+              <section>
+                <h4 class="text-white font-semibold mb-1">2. Dati raccolti</h4>
+                <p>L'app raccoglie esclusivamente i dati che inserisci volontariamente:</p>
+                <ul class="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
+                  <li>Indirizzo email e password (per autenticazione)</li>
+                  <li>Transazioni finanziarie (importo, descrizione, categoria, data)</li>
+                  <li>Transazioni ricorrenti configurate</li>
+                  <li>Categorie personalizzate</li>
+                  <li>Dati portafogli condivisi e appartenenze</li>
+                  <li>Foto profilo (opzionale)</li>
+                </ul>
+              </section>
 
-            <section>
-              <h4 class="text-white font-semibold mb-1">4. Base giuridica</h4>
-              <p>Il trattamento si basa sul consenso dell'utente (Art. 6, par. 1, lett. a GDPR) e sull'esecuzione del contratto di servizio (Art. 6, par. 1, lett. b GDPR).</p>
-            </section>
+              <section>
+                <h4 class="text-white font-semibold mb-1">3. Finalità del trattamento</h4>
+                <p>I dati sono trattati esclusivamente per fornire il servizio: autenticazione, archiviazione e visualizzazione delle transazioni personali e condivise. Non vengono usati per profilazione, marketing o ceduti a terzi.</p>
+              </section>
 
-            <section>
-              <h4 class="text-white font-semibold mb-1">5. Conservazione dei dati</h4>
-              <p>I dati sono conservati sui server di Supabase (AWS, regione EU) finché l'account è attivo. All'eliminazione dell'account tutti i dati vengono cancellati definitivamente entro 30 giorni.</p>
-            </section>
+              <section>
+                <h4 class="text-white font-semibold mb-1">4. Base giuridica</h4>
+                <p>Il trattamento si basa sull'esecuzione del contratto di servizio (Art. 6, par. 1, lett. b GDPR) per le funzionalità principali, e sul consenso dell'utente (Art. 6, par. 1, lett. a GDPR) per funzionalità opzionali (es. analytics, se attivati in futuro).</p>
+              </section>
 
-            <section>
-              <h4 class="text-white font-semibold mb-1">6. I tuoi diritti (GDPR)</h4>
-              <p>Hai diritto a: accesso, rettifica, cancellazione ("diritto all'oblio"), portabilità (CSV export disponibile in Impostazioni), opposizione al trattamento. Per esercitare i tuoi diritti contattaci via email.</p>
-            </section>
+              <section>
+                <h4 class="text-white font-semibold mb-1">5. Dove sono conservati i dati</h4>
+                <p>I dati sono conservati sui server di Supabase (infrastruttura AWS, <strong>regione EU eu-central-1</strong>). I dati non vengono trasferiti al di fuori dell'UE.</p>
+              </section>
 
-            <section>
-              <h4 class="text-white font-semibold mb-1">7. Sicurezza</h4>
-              <p>I dati sono protetti da crittografia in transito (TLS) e a riposo (AES-256). L'accesso è limitato al solo utente autenticato tramite Row Level Security su database.</p>
-            </section>
+              <section>
+                <h4 class="text-white font-semibold mb-1">6. Misure di sicurezza</h4>
+                <ul class="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
+                  <li>Crittografia in transito: TLS 1.2+</li>
+                  <li>Crittografia a riposo: AES-256</li>
+                  <li>Accesso ai dati limitato tramite Row Level Security (RLS)</li>
+                  <li>Password hashate con bcrypt (mai in chiaro)</li>
+                </ul>
+              </section>
 
-            <section>
-              <h4 class="text-white font-semibold mb-1">8. Cookie e tracker</h4>
-              <p>L'app non utilizza cookie di tracciamento, strumenti di analytics o pubblicità.</p>
-            </section>
+              <section>
+                <h4 class="text-white font-semibold mb-1">7. Conservazione dei dati</h4>
+                <p>I dati sono conservati finché l'account è attivo. All'eliminazione dell'account, tutti i dati vengono cancellati definitivamente entro 30 giorni.</p>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">8. Responsabili del trattamento</h4>
+                <ul class="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
+                  <li>Supabase Inc. (database, autenticazione, storage)</li>
+                  <li>Vercel Inc. (hosting frontend, solo file statici)</li>
+                </ul>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">9. I tuoi diritti (GDPR / nLPD)</h4>
+                <p>Hai diritto a:</p>
+                <ul class="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
+                  <li><strong>Accesso</strong>: l'app mostra tutti i tuoi dati direttamente</li>
+                  <li><strong>Portabilità</strong>: esporta tutti i dati in JSON o CSV dalle Impostazioni</li>
+                  <li><strong>Rettifica</strong>: modifica transazioni e profilo direttamente nell'app</li>
+                  <li><strong>Cancellazione</strong>: elimina l'account dalle Impostazioni (irreversibile)</li>
+                  <li><strong>Opposizione</strong>: contattaci via email</li>
+                </ul>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">10. Privacy by Design e by Default (nLPD)</h4>
+                <p>L'app raccoglie solo i dati strettamente necessari al funzionamento del servizio. Non vengono attivati analytics o tracciamenti per impostazione predefinita. L'utente ha il pieno controllo dei propri dati.</p>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">11. Cookie e tracker</h4>
+                <p>L'app non utilizza cookie di tracciamento, strumenti di analytics o pubblicità.</p>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">12. Contatti</h4>
+                <p>SpaceWeb Labs — <span class="text-teal-400">support@expensetracker.app</span></p>
+              </section>
+            </template>
+
+            <!-- English -->
+            <template v-else>
+              <section>
+                <h4 class="text-white font-semibold mb-1">1. Data Controller</h4>
+                <p>SpaceWeb Labs, developer of the Expense Tracker app. For any request: <span class="text-teal-400">support@expensetracker.app</span></p>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">2. Data Collected</h4>
+                <p>The app only collects data you voluntarily provide:</p>
+                <ul class="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
+                  <li>Email address and password (for authentication)</li>
+                  <li>Financial transactions (amount, description, category, date)</li>
+                  <li>Recurring transaction configurations</li>
+                  <li>Custom categories</li>
+                  <li>Shared wallet data and memberships</li>
+                  <li>Profile picture (optional)</li>
+                </ul>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">3. Purpose of Processing</h4>
+                <p>Data is processed solely to provide the service: authentication, storage, and display of personal and shared transactions. Data is never used for profiling, marketing, or shared with third parties.</p>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">4. Legal Basis</h4>
+                <p>Processing is based on contract execution (GDPR Art. 6(1)(b)) for core features, and user consent (GDPR Art. 6(1)(a)) for optional features (e.g., analytics, if enabled in the future).</p>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">5. Data Storage Location</h4>
+                <p>Data is stored on Supabase servers (AWS infrastructure, <strong>EU region eu-central-1</strong>). No data is transferred outside the EU.</p>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">6. Security Measures</h4>
+                <ul class="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
+                  <li>Encryption in transit: TLS 1.2+</li>
+                  <li>Encryption at rest: AES-256</li>
+                  <li>Data access restricted via Row Level Security (RLS)</li>
+                  <li>Passwords hashed with bcrypt (never stored in plaintext)</li>
+                </ul>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">7. Data Retention</h4>
+                <p>Data is retained as long as the account is active. Upon account deletion, all data is permanently removed within 30 days.</p>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">8. Third-party Processors</h4>
+                <ul class="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
+                  <li>Supabase Inc. (database, authentication, storage)</li>
+                  <li>Vercel Inc. (frontend hosting, static files only)</li>
+                </ul>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">9. Your Rights (GDPR / nLPD)</h4>
+                <p>You have the right to:</p>
+                <ul class="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
+                  <li><strong>Access</strong>: the app displays all your data directly</li>
+                  <li><strong>Portability</strong>: export all data as JSON or CSV from Settings</li>
+                  <li><strong>Rectification</strong>: edit transactions and profile directly in-app</li>
+                  <li><strong>Erasure</strong>: delete your account from Settings (irreversible)</li>
+                  <li><strong>Objection</strong>: contact us via email</li>
+                </ul>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">10. Privacy by Design & Default (nLPD)</h4>
+                <p>The app only collects data strictly necessary for the service. No analytics or tracking is enabled by default. Users have full control over their data.</p>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">11. Cookies & Trackers</h4>
+                <p>The app does not use tracking cookies, analytics tools, or advertising.</p>
+              </section>
+
+              <section>
+                <h4 class="text-white font-semibold mb-1">12. Contact</h4>
+                <p>SpaceWeb Labs — <span class="text-teal-400">support@expensetracker.app</span></p>
+              </section>
+            </template>
           </div>
         </div>
       </Transition>
@@ -577,24 +875,117 @@ import { useAuth } from '../composables/useAuth'
 import { useCurrency } from '../composables/useCurrency'
 import { useAvatar } from '../composables/useAvatar'
 import { useExpenses } from '../composables/useExpenses'
+import { supabase } from '../lib/supabase'
 import { useCategories } from '../composables/useCategories'
 import { useSelectedMonth } from '../composables/useSelectedMonth'
+import { APP_VERSION } from '../constants/version'
 
 const { user, signOut, loading, displayName, updateProfile, updatePassword, deleteAccount } = useAuth()
 const { currency, availableCurrencies, setCurrency, currentCurrency } = useCurrency()
 const { displayAvatarUrl, uploadAvatar } = useAvatar()
 const { expenses, getCategoryConfig } = useExpenses()
-const { orderedCategories, toggleCategory, moveCategory, resetToDefaults } = useCategories()
+const {
+  managedExpenseCategories,
+  managedIncomeCategories,
+  reorderCategory,
+  addCategory,
+  updateCategory,
+  deleteCategory,
+} = useCategories()
 const { displayMonthYear, monthKey } = useSelectedMonth()
 
-const appVersion = __APP_VERSION__
+const appVersion = APP_VERSION
 
 const currencyPickerOpen = ref(false)
 const profileSheetOpen = ref(false)
 const categoriesSheetOpen = ref(false)
 const privacySheetOpen = ref(false)
+const privacyLang = ref<'it' | 'en'>('it')
 const passwordEditMode = ref(false)
 const emailEditMode = ref(false)
+
+// ── Category management state ────────────────────────────────
+const catViewType = ref<'expense' | 'income'>('expense')
+const showAddCategoryForm = ref(false)
+const editingCategoryId = ref<string | null>(null)
+
+const newCatForm = reactive({
+  label: '',
+  icon: '',
+  color: '#3B82F6',
+  type: 'expense' as 'expense' | 'income',
+})
+
+const colorOptions = [
+  '#EF4444', '#F59E0B', '#FBBF24', '#10B981', '#06B6D4',
+  '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#F97316',
+  '#14B8A6', '#6B7280', '#374151', '#A855F7',
+]
+
+const displayedManagedCategories = computed(() =>
+  catViewType.value === 'expense' ? managedExpenseCategories.value : managedIncomeCategories.value
+)
+
+function startEditCategory(cat: any) {
+  editingCategoryId.value = cat.id
+  newCatForm.label = cat.label
+  newCatForm.icon = cat.icon
+  newCatForm.color = cat.color
+  newCatForm.type = cat.type
+  showAddCategoryForm.value = true
+}
+
+function closeAddCategoryForm() {
+  showAddCategoryForm.value = false
+  editingCategoryId.value = null
+  newCatForm.label = ''
+  newCatForm.icon = ''
+  newCatForm.color = '#3B82F6'
+  newCatForm.type = 'expense'
+}
+
+async function handleSaveCategory() {
+  try {
+    if (editingCategoryId.value) {
+      await updateCategory(editingCategoryId.value, {
+        label: newCatForm.label.trim(),
+        icon: newCatForm.icon,
+        color: newCatForm.color,
+      })
+      showFeedback('Categoria aggiornata', 'success')
+    } else {
+      await addCategory({
+        label: newCatForm.label.trim(),
+        icon: newCatForm.icon,
+        color: newCatForm.color,
+        type: newCatForm.type as 'expense' | 'income',
+      })
+      showFeedback('Categoria creata', 'success')
+    }
+    closeAddCategoryForm()
+  } catch (e: any) {
+    showFeedback(e.message || 'Errore nel salvataggio', 'error')
+  }
+}
+
+async function handleDeleteCategory(id: string) {
+  try {
+    await deleteCategory(id)
+    showFeedback('Categoria eliminata', 'success')
+    closeAddCategoryForm()
+  } catch (e: any) {
+    showFeedback(e.message || 'Errore nell\'eliminazione', 'error')
+  }
+}
+
+async function handleToggleCategory(id: string, active: boolean) {
+  try {
+    await updateCategory(id, { isActive: active })
+    showFeedback(active ? 'Categoria abilitata' : 'Categoria disabilitata', 'success')
+  } catch (e: any) {
+    showFeedback(e.message || 'Errore nell\'aggiornamento', 'error')
+  }
+}
 const showDeleteConfirm = ref(false)
 const deletingAccount = ref(false)
 const feedbackMessage = ref('')
@@ -677,6 +1068,47 @@ function handleExport() {
   setTimeout(() => {
     exportSuccess.value = false
   }, 3000)
+}
+
+// ── Full Data Export (GDPR) ───────────────────────────────────
+
+async function handleExportAllData() {
+  if (!user.value) return
+
+  try {
+    // Fetch all user data in parallel
+    const [expensesRes, recurringRes, categoriesRes] = await Promise.all([
+      supabase.from('expenses').select('*').eq('user_id', user.value.id).is('shared_wallet_id', null),
+      supabase.from('recurring_expenses').select('*').eq('user_id', user.value.id),
+      supabase.from('categories').select('*').eq('user_id', user.value.id),
+    ])
+
+    const exportData = {
+      exportDate: new Date().toISOString(),
+      user: {
+        email: user.value.email,
+        displayName: user.value.user_metadata?.display_name || '',
+        createdAt: user.value.created_at,
+      },
+      transactions: expensesRes.data || [],
+      recurringTransactions: recurringRes.data || [],
+      customCategories: categoriesRes.data || [],
+    }
+
+    const json = JSON.stringify(exportData, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `expense-tracker-data-${new Date().toISOString().split('T')[0]}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+
+    showFeedback('Dati esportati con successo', 'success')
+  } catch (e: any) {
+    showFeedback('Errore nell\'esportazione dei dati', 'error')
+    console.error('Export all data error:', e)
+  }
 }
 
 // ── Currency ─────────────────────────────────────────────────

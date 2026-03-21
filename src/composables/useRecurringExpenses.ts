@@ -1,7 +1,8 @@
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { supabase, type DbRecurringExpense } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import { useExpenses, getCategoryConfig, type TransactionType } from './useExpenses'
+import { useSharedWallets } from './useSharedWallets'
 
 export interface RecurringExpense {
   id: string
@@ -14,6 +15,7 @@ export interface RecurringExpense {
   enabled: boolean
   lastGeneratedDate: string | null
   type: TransactionType
+  sharedWalletId: string | null
 }
 
 // Singleton state
@@ -38,12 +40,20 @@ function transformRecurringExpense(db: DbRecurringExpense): RecurringExpense {
     enabled:           db.enabled,
     lastGeneratedDate: db.last_generated_date,
     type:              txType,
+    sharedWalletId:    db.shared_wallet_id,
   }
 }
 
 export function useRecurringExpenses() {
   const { user, isAuthenticated } = useAuth()
   const { addExpense, refresh: refreshExpenses } = useExpenses()
+  const { activeWallet, addWalletTransaction, fetchWalletTransactions } = useSharedWallets()
+
+  // Filtered recurring expenses based on active wallet context
+  const filteredRecurringExpenses = computed(() => {
+    const walletId = activeWallet.value?.id || null
+    return recurringExpenses.value.filter(r => r.sharedWalletId === walletId)
+  })
 
   async function fetchRecurringExpenses() {
     if (!isAuthenticated.value || !user.value) {
@@ -83,17 +93,23 @@ export function useRecurringExpenses() {
     error.value = null
 
     try {
+      const insertData: Record<string, any> = {
+        user_id:          user.value.id,
+        description:      data.description,
+        amount:           data.amount,
+        category_id:      data.category,
+        day_of_month:     data.dayOfMonth,
+        enabled:          true,
+        transaction_type: data.type ?? 'expense',
+      }
+      // Associate with active shared wallet if one is selected
+      if (activeWallet.value) {
+        insertData.shared_wallet_id = activeWallet.value.id
+      }
+
       const { data: newItem, error: insertError } = await supabase
         .from('recurring_expenses')
-        .insert({
-          user_id:          user.value.id,
-          description:      data.description,
-          amount:           data.amount,
-          category_id:      data.category,
-          day_of_month:     data.dayOfMonth,
-          enabled:          true,
-          transaction_type: data.type ?? 'expense',
-        })
+        .insert(insertData)
         .select()
         .single()
 
@@ -227,17 +243,34 @@ export function useRecurringExpenses() {
 
       if (itemsToGenerate.length === 0) return
 
+      const walletIdsToRefresh = new Set<string>()
+      let personalGenerated = false
+
       const results = await Promise.allSettled(
         itemsToGenerate.map(async (item) => {
           const txType: TransactionType = item.transaction_type === 'income' ? 'income' : 'expense'
 
-          await addExpense({
-            description: item.description,
-            date:        todayDateStr,
-            amount:      Number(item.amount),
-            category:    item.category_id,
-            type:        txType,
-          })
+          if (item.shared_wallet_id) {
+            // Generate into shared wallet
+            await addWalletTransaction(item.shared_wallet_id, {
+              description: item.description,
+              date:        todayDateStr,
+              amount:      Number(item.amount),
+              category:    item.category_id,
+              type:        txType,
+            })
+            walletIdsToRefresh.add(item.shared_wallet_id)
+          } else {
+            // Generate into personal expenses
+            await addExpense({
+              description: item.description,
+              date:        todayDateStr,
+              amount:      Number(item.amount),
+              category:    item.category_id,
+              type:        txType,
+            })
+            personalGenerated = true
+          }
 
           await supabase
             .from('recurring_expenses')
@@ -251,13 +284,16 @@ export function useRecurringExpenses() {
         })
       )
 
-      const generatedCount = results.filter(r => r.status === 'fulfilled').length
       results.filter(r => r.status === 'rejected').forEach(r => {
         console.error('Failed to auto-generate recurring transaction:', (r as PromiseRejectedResult).reason)
       })
 
-      if (generatedCount > 0) {
+      if (personalGenerated) {
         await refreshExpenses()
+      }
+      // Refresh wallet transactions if any were generated
+      for (const wId of walletIdsToRefresh) {
+        await fetchWalletTransactions(wId)
       }
     } catch (e) {
       console.error('Auto-generation failed:', e)
@@ -276,7 +312,8 @@ export function useRecurringExpenses() {
   }
 
   return {
-    recurringExpenses,
+    recurringExpenses: filteredRecurringExpenses,
+    allRecurringExpenses: recurringExpenses,
     loading,
     error,
     fetchRecurringExpenses,

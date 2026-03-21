@@ -2,6 +2,7 @@ import { ref, computed, watch } from 'vue'
 import { supabase, type DbExpense } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import { useSelectedMonth } from './useSelectedMonth'
+import { useCategories } from './useCategories'
 
 export type TransactionType = 'expense' | 'income'
 
@@ -24,38 +25,15 @@ export interface Category {
   type: TransactionType
 }
 
-// Single source of truth for all categories
-export const ALL_CATEGORIES: Category[] = [
-  // Expense categories
-  { id: 'Ristoranti',      label: 'Ristoranti e Bar',   icon: '🍽️', color: '#F59E0B', type: 'expense' },
-  { id: 'Spesa',           label: 'Spesa Alimentare',   icon: '🛒', color: '#10B981', type: 'expense' },
-  { id: 'Casa',            label: 'Casa e Affitto',     icon: '🏠', color: '#3B82F6', type: 'expense' },
-  { id: 'Bollette',        label: 'Bollette e Utenze',  icon: '⚡', color: '#FBBF24', type: 'expense' },
-  { id: 'Trasporti',       label: 'Trasporti',          icon: '🚗', color: '#374151', type: 'expense' },
-  { id: 'Salute',          label: 'Salute e Benessere', icon: '💪', color: '#EF4444', type: 'expense' },
-  { id: 'Intrattenimento', label: 'Intrattenimento',    icon: '🎬', color: '#8B5CF6', type: 'expense' },
-  { id: 'Abbonamenti',     label: 'Abbonamenti',        icon: '📱', color: '#6366F1', type: 'expense' },
-  { id: 'Shopping',        label: 'Shopping',           icon: '🛍️', color: '#EC4899', type: 'expense' },
-  { id: 'Altro',           label: 'Altro',              icon: '📦', color: '#6B7280', type: 'expense' },
-  // Income categories
-  { id: 'Stipendio',    label: 'Stipendio',    icon: '💼', color: '#10B981', type: 'income' },
-  { id: 'Regalo',       label: 'Regalo',       icon: '🎁', color: '#F59E0B', type: 'income' },
-  { id: 'Donazione',    label: 'Donazione',    icon: '🤝', color: '#8B5CF6', type: 'income' },
-  { id: 'Freelance',    label: 'Freelance',    icon: '💻', color: '#3B82F6', type: 'income' },
-  { id: 'Investimento', label: 'Investimento', icon: '📈', color: '#06B6D4', type: 'income' },
-  { id: 'AltroEntrata', label: 'Altro',        icon: '💰', color: '#6B7280', type: 'income' },
-]
-
-// Derived slices — preserved for backward-compat imports
-export const CATEGORIES        = ALL_CATEGORIES.filter(c => c.type === 'expense')
-export const INCOME_CATEGORIES = ALL_CATEGORIES.filter(c => c.type === 'income')
-
-// O(1) lookup map
-const categoryMap = new Map(ALL_CATEGORIES.map(c => [c.id, c]))
+// Default fallback category
 const defaultCategory: Category = { id: 'Altro', label: 'Altro', icon: '📦', color: '#6B7280', type: 'expense' }
 
+// Dynamic getCategoryConfig that uses DB categories
 export function getCategoryConfig(id: string): Category {
-  return categoryMap.get(id) ?? defaultCategory
+  const { getCategoryById } = useCategories()
+  const cat = getCategoryById(id)
+  if (cat) return { id: cat.id, label: cat.label, icon: cat.icon, color: cat.color, type: cat.type }
+  return defaultCategory
 }
 
 // Shared reactive state (singleton pattern)
@@ -328,9 +306,6 @@ export function useExpenses() {
     totalIncome,
     loading,
     error,
-    ALL_CATEGORIES,
-    CATEGORIES,
-    INCOME_CATEGORIES,
     getCategoryConfig,
     formatDate,
     addExpense,
