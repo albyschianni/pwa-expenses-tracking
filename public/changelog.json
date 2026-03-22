@@ -1,5 +1,19 @@
 [
   {
+    "version": "2.0.0",
+    "date": "2026-03-22",
+    "title": "Portafogli Condivisi & Notifiche Push",
+    "highlights": [
+      { "icon": "👥", "text": "Portafogli condivisi: crea un gruppo e gestisci le spese insieme" },
+      { "icon": "✉️", "text": "Cerca utenti e invitali al tuo portafoglio condiviso" },
+      { "icon": "🔔", "text": "Notifiche push native: ricevi inviti anche ad app chiusa" },
+      { "icon": "📲", "text": "Tocca la notifica per aprire direttamente la pagina inviti" },
+      { "icon": "✅", "text": "Accetta o rifiuta gli inviti con un tap" },
+      { "icon": "🚫", "text": "Annulla inviti in attesa dalle impostazioni del gruppo" },
+      { "icon": "🏷️", "text": "Categorie personalizzate con icona e colore a scelta" }
+    ]
+  },
+  {
     "version": "1.8.0",
     "date": "2026-03-21",
     "title": "Categorie Personalizzate & Aggiornamenti",

@@ -154,6 +154,9 @@ import { useExpenses, type Expense } from "./composables/useExpenses"
 import { useAuth } from "./composables/useAuth"
 import { useRecurringExpenses, type RecurringExpense } from "./composables/useRecurringExpenses"
 import { useSharedWallets } from "./composables/useSharedWallets"
+import { useWalletInvitations } from "./composables/useWalletInvitations"
+import { usePushNotifications } from "./composables/usePushNotifications"
+import { useCategories } from "./composables/useCategories"
 import WhatsNewModal from "./components/WhatsNewModal.vue"
 import { useWhatsNew } from "./composables/useWhatsNew"
 
@@ -167,6 +170,9 @@ if ('serviceWorker' in navigator) {
 const { addExpense, updateExpense, deleteExpense, fetchExpenses } = useExpenses()
 const { isAuthenticated, isPasswordRecovery, loading: authLoading } = useAuth()
 const { activeWallet, addWalletTransaction } = useSharedWallets()
+const { fetchPendingInvitations } = useWalletInvitations()
+const { checkSubscription } = usePushNotifications()
+const { fetchCategories } = useCategories()
 const { checkForUpdates } = useWhatsNew()
 const {
   addRecurringExpense,
@@ -176,8 +182,22 @@ const {
   processAutoGeneration
 } = useRecurringExpenses()
 
-// Navigation state
-const activeTab = ref('home')
+// Navigation state — check URL for tab parameter (from push notification click)
+const validTabs = ['home', 'graphic', 'wallets', 'recurring', 'settings']
+const urlTab = new URLSearchParams(window.location.search).get('tab')
+const activeTab = ref(urlTab && validTabs.includes(urlTab) ? urlTab : 'home')
+
+// Clean up URL parameter
+if (urlTab) {
+  window.history.replaceState({}, '', window.location.pathname)
+}
+
+// Listen for service worker messages (when app is already open)
+navigator.serviceWorker?.addEventListener('message', (event) => {
+  if (event.data?.type === 'navigate' && validTabs.includes(event.data.tab)) {
+    activeTab.value = event.data.tab
+  }
+})
 
 // Scroll refs for each tab
 const homeScrollRef = ref<HTMLElement | null>(null)
@@ -222,11 +242,22 @@ const recurringToEdit = ref<RecurringExpense | null>(null)
 // Parallelize independent fetches, then run auto-generation
 watch(isAuthenticated, async (authenticated) => {
   if (authenticated) {
+    // Categories must load first so expense icons/colors resolve correctly
+    await fetchCategories()
     await Promise.all([fetchExpenses(), fetchRecurringExpenses()])
     await processAutoGeneration()
-    checkForUpdates()
+    // Defer non-critical tasks so they don't compete with initial UI render
+    setTimeout(() => checkForUpdates(), 500)
+    setTimeout(() => checkSubscription(), 1500)
   }
 }, { immediate: true })
+
+// Refresh invitations when app comes back to foreground
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && isAuthenticated.value) {
+    fetchPendingInvitations()
+  }
+})
 
 // ============================================================
 // CREATE EXPENSE

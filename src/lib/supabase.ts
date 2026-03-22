@@ -50,6 +50,25 @@ export interface DbSharedWalletMember {
   joined_at: string
 }
 
+export interface DbPushSubscription {
+  id: string
+  user_id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+  created_at: string
+}
+
+export interface DbWalletInvitation {
+  id: string
+  wallet_id: string
+  invited_by: string
+  invited_user_id: string
+  status: 'pending' | 'accepted' | 'rejected'
+  created_at: string
+  updated_at: string
+}
+
 export interface DbRecurringExpense {
   id: string
   user_id: string

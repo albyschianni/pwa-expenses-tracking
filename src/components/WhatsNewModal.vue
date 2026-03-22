@@ -23,7 +23,7 @@
           </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto px-6 pb-6">
+        <div class="flex-1 min-h-0 overflow-y-auto px-6 pb-6" style="-webkit-overflow-scrolling: touch; overscroll-behavior: contain;">
           <div
             v-for="entry in changelogEntries"
             :key="entry.version"

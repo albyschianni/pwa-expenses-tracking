@@ -59,7 +59,7 @@ export function useWhatsNew() {
     // Version changed: fetch changelog and filter relevant entries
     try {
       const response = await fetch('/changelog.json')
-      if (!response.ok) return
+      if (!response.ok) return // Don't mark as seen — retry next time
 
       const allEntries: ChangelogEntry[] = await response.json()
 
@@ -77,8 +77,7 @@ export function useWhatsNew() {
         setLastSeenVersion(APP_VERSION)
       }
     } catch {
-      // Network error — update silently
-      setLastSeenVersion(APP_VERSION)
+      // Network error — do NOT mark as seen, retry on next app open
     }
   }
 

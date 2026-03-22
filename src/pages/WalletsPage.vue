@@ -11,6 +11,9 @@
       </button>
     </div>
 
+    <!-- Pending Invitations Banner -->
+    <InvitationsBanner />
+
     <!-- Empty state -->
     <div v-if="wallets.length === 0 && !loading" class="text-center py-16">
       <div class="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center mx-auto mb-4">
@@ -160,9 +163,36 @@
               </div>
             </div>
 
-            <!-- Add member (owner only) -->
+            <!-- Pending invitations for this wallet (owner only) -->
+            <div v-if="isOwner && walletPendingInvites.length > 0" class="mb-6">
+              <h4 class="text-white font-semibold mb-3">Inviti in attesa</h4>
+              <div class="space-y-2">
+                <div
+                  v-for="inv in walletPendingInvites"
+                  :key="inv.id"
+                  class="bg-gray-700/50 rounded-xl p-3 flex items-center gap-3"
+                >
+                  <div class="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-sm">
+                    ⏳
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-gray-300 text-sm truncate">{{ inv.email }}</p>
+                    <p class="text-yellow-500/70 text-xs">In attesa di risposta</p>
+                  </div>
+                  <button
+                    @click="handleCancelInvite(inv.id)"
+                    :disabled="cancellingInviteId === inv.id"
+                    class="text-red-400 text-xs font-medium active:text-red-300 disabled:opacity-50"
+                  >
+                    {{ cancellingInviteId === inv.id ? '...' : 'Annulla' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Invite member (owner only) -->
             <div v-if="isOwner" class="mb-6">
-              <h4 class="text-white font-semibold mb-3">Aggiungi Membro</h4>
+              <h4 class="text-white font-semibold mb-3">Invita Membro</h4>
               <div class="flex gap-2 mb-2">
                 <input
                   v-model="memberSearchEmail"
@@ -173,18 +203,27 @@
                   @input="handleSearchUsers"
                 />
               </div>
+
+              <!-- Invite feedback -->
+              <p v-if="inviteMessage" class="text-sm mb-2" :class="inviteError ? 'text-red-400' : 'text-teal-400'">
+                {{ inviteMessage }}
+              </p>
+
               <div v-if="searchResults.length > 0" class="space-y-1">
                 <button
                   v-for="u in searchResults"
                   :key="u.id"
-                  @click="handleAddMember(u.id)"
-                  class="w-full bg-gray-700 rounded-xl p-3 flex items-center gap-3 text-left active:bg-gray-600 transition-colors"
+                  @click="handleInviteMember(u)"
+                  :disabled="invitingUserId === u.id"
+                  class="w-full bg-gray-700 rounded-xl p-3 flex items-center gap-3 text-left active:bg-gray-600 transition-colors disabled:opacity-50"
                 >
                   <div class="flex-1 min-w-0">
                     <p class="text-white text-sm truncate">{{ u.displayName || u.email }}</p>
                     <p class="text-gray-500 text-xs truncate">{{ u.email }}</p>
                   </div>
-                  <span class="text-teal-400 text-sm font-medium">Aggiungi</span>
+                  <span class="text-teal-400 text-sm font-medium">
+                    {{ invitingUserId === u.id ? 'Invio...' : 'Invita' }}
+                  </span>
                 </button>
               </div>
             </div>
@@ -213,13 +252,24 @@
       </Transition>
     </Teleport>
 
+    <!-- Notification Permission Dialog -->
+    <NotificationPermissionDialog
+      :open="showNotificationDialog"
+      @close="handleNotificationDialogClose"
+      @granted="handleNotificationGranted"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
+import { supabase } from '../lib/supabase'
 import { useSharedWallets, type UserSearchResult } from '../composables/useSharedWallets'
+import { useWalletInvitations } from '../composables/useWalletInvitations'
+import { usePushNotifications } from '../composables/usePushNotifications'
 import { useAuth } from '../composables/useAuth'
+import InvitationsBanner from '../components/InvitationsBanner.vue'
+import NotificationPermissionDialog from '../components/NotificationPermissionDialog.vue'
 
 const { user } = useAuth()
 const {
@@ -232,25 +282,92 @@ const {
   updateWallet,
   deleteWallet,
   setActiveWallet,
-  addMember,
   removeMember,
   leaveWallet,
   searchUsers,
 } = useSharedWallets()
 
+const { sendInvitation, cancelInvitation } = useWalletInvitations()
+const { pushSupported, permissionState, checkSubscription } = usePushNotifications()
+
 const showCreateDialog = ref(false)
 const showWalletSettings = ref(false)
+const showNotificationDialog = ref(false)
 
 async function openWalletSettings(w: typeof wallets.value[0]) {
   await setActiveWallet(w)
   editWalletName.value = w.name
+  fetchWalletPendingInvites()
   showWalletSettings.value = true
 }
 const newWalletName = ref('')
 const editWalletName = ref('')
 const memberSearchEmail = ref('')
 const searchResults = ref<UserSearchResult[]>([])
+const invitingUserId = ref<string | null>(null)
+const inviteMessage = ref('')
+const inviteError = ref(false)
+const cancellingInviteId = ref<string | null>(null)
 
+// Pending invitations for the current wallet (owner view)
+const walletPendingInvites = ref<{ id: string; email: string }[]>([])
+
+async function fetchWalletPendingInvites() {
+  if (!activeWallet.value) return
+  try {
+    const { data } = await supabase
+      .from('wallet_invitations')
+      .select('id, invited_user_id')
+      .eq('wallet_id', activeWallet.value.id)
+      .eq('status', 'pending')
+
+    if (!data || data.length === 0) {
+      walletPendingInvites.value = []
+      return
+    }
+
+    const userIds = data.map((d: any) => d.invited_user_id)
+    const { data: users } = await supabase
+      .rpc('get_users_by_ids', { user_ids: userIds })
+
+    const userMap = new Map<string, string>()
+    for (const u of users || []) {
+      userMap.set(u.id, u.display_name || u.email)
+    }
+
+    walletPendingInvites.value = data.map((d: any) => ({
+      id: d.id,
+      email: userMap.get(d.invited_user_id) || 'Utente',
+    }))
+  } catch (e) {
+    console.error('Failed to fetch pending invites:', e)
+  }
+}
+
+// Check if push notification prompt should be shown (first time on wallets tab)
+const PUSH_PROMPT_KEY = 'push_notification_prompted'
+
+onMounted(() => {
+  if (pushSupported.value && permissionState.value === 'default') {
+    const alreadyPrompted = localStorage.getItem(PUSH_PROMPT_KEY)
+    if (!alreadyPrompted) {
+      showNotificationDialog.value = true
+    }
+  }
+  // If already granted, ensure subscription is active
+  if (permissionState.value === 'granted') {
+    checkSubscription()
+  }
+})
+
+function handleNotificationDialogClose() {
+  showNotificationDialog.value = false
+  localStorage.setItem(PUSH_PROMPT_KEY, 'true')
+}
+
+function handleNotificationGranted() {
+  localStorage.setItem(PUSH_PROMPT_KEY, 'true')
+}
 
 async function handleCreateWallet() {
   if (!newWalletName.value.trim()) return
@@ -294,6 +411,7 @@ async function handleLeaveWallet() {
 
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
 function handleSearchUsers() {
+  inviteMessage.value = ''
   if (searchTimeout) clearTimeout(searchTimeout)
   searchTimeout = setTimeout(async () => {
     if (memberSearchEmail.value.length < 3) {
@@ -301,21 +419,46 @@ function handleSearchUsers() {
       return
     }
     try {
-      searchResults.value = await searchUsers(memberSearchEmail.value)
+      const results = await searchUsers(memberSearchEmail.value)
+      // Filter out existing members
+      const memberIds = new Set(walletMembers.value.map(m => m.userId))
+      searchResults.value = results.filter(r => !memberIds.has(r.id))
     } catch (e) {
       console.error('Search failed:', e)
     }
   }, 300)
 }
 
-async function handleAddMember(userId: string) {
+async function handleInviteMember(u: UserSearchResult) {
   if (!activeWallet.value) return
+  invitingUserId.value = u.id
+  inviteMessage.value = ''
+  inviteError.value = false
+
   try {
-    await addMember(activeWallet.value.id, userId)
+    await sendInvitation(activeWallet.value.id, u.id)
+    inviteMessage.value = `Invito inviato a ${u.displayName || u.email}`
+    inviteError.value = false
     memberSearchEmail.value = ''
     searchResults.value = []
+    await fetchWalletPendingInvites()
+  } catch (e: any) {
+    inviteMessage.value = e.message || 'Errore nell\'invio dell\'invito'
+    inviteError.value = true
+  } finally {
+    invitingUserId.value = null
+  }
+}
+
+async function handleCancelInvite(invitationId: string) {
+  cancellingInviteId.value = invitationId
+  try {
+    await cancelInvitation(invitationId)
+    await fetchWalletPendingInvites()
   } catch (e) {
-    console.error('Failed to add member:', e)
+    console.error('Failed to cancel invitation:', e)
+  } finally {
+    cancellingInviteId.value = null
   }
 }
 
@@ -332,6 +475,8 @@ async function handleRemoveMember(memberId: string) {
 watch(showWalletSettings, (open) => {
   if (!open) {
     setActiveWallet(null)
+    walletPendingInvites.value = []
+    inviteMessage.value = ''
   }
 })
 </script>
