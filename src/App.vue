@@ -130,6 +130,13 @@
 
     <!-- WHAT'S NEW MODAL -->
     <WhatsNewModal />
+
+    <!-- PUSH NOTIFICATION PROMPT (auto for installed PWA) -->
+    <NotificationPermissionDialog
+      :open="showPushPrompt"
+      @close="showPushPrompt = false"
+      @granted="showPushPrompt = false"
+    />
   </div>
 </template>
 
@@ -158,6 +165,7 @@ import { useWalletInvitations } from "./composables/useWalletInvitations"
 import { usePushNotifications } from "./composables/usePushNotifications"
 import { useCategories } from "./composables/useCategories"
 import WhatsNewModal from "./components/WhatsNewModal.vue"
+import NotificationPermissionDialog from "./components/NotificationPermissionDialog.vue"
 import { useWhatsNew } from "./composables/useWhatsNew"
 
 // Auto-reload when a new service worker takes control (new deployment)
@@ -171,7 +179,7 @@ const { addExpense, updateExpense, deleteExpense, fetchExpenses } = useExpenses(
 const { isAuthenticated, isPasswordRecovery, loading: authLoading } = useAuth()
 const { activeWallet, addWalletTransaction } = useSharedWallets()
 const { fetchPendingInvitations } = useWalletInvitations()
-const { checkSubscription } = usePushNotifications()
+const { pushSupported, permissionState, checkSubscription } = usePushNotifications()
 const { fetchCategories } = useCategories()
 const { checkForUpdates } = useWhatsNew()
 const {
@@ -228,6 +236,7 @@ const expenseDetailOpen = ref(false)
 const recurringDialogOpen = ref(false)
 const menuOpen = ref(false)
 const avatarViewerOpen = ref(false)
+const showPushPrompt = ref(false)
 
 // Expense being edited (null = create mode)
 const expenseToEdit = ref<Expense | null>(null)
@@ -249,6 +258,18 @@ watch(isAuthenticated, async (authenticated) => {
     // Defer non-critical tasks so they don't compete with initial UI render
     setTimeout(() => checkForUpdates(), 500)
     setTimeout(() => checkSubscription(), 1500)
+
+    // Auto-prompt push notifications for installed PWA users
+    const isInstalledPwa = window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as any).standalone === true
+    if (isInstalledPwa && pushSupported.value && permissionState.value !== 'granted') {
+      // Show after WhatsNew modal has had time to appear and be dismissed
+      setTimeout(() => {
+        if (permissionState.value !== 'granted') {
+          showPushPrompt.value = true
+        }
+      }, 2500)
+    }
   }
 }, { immediate: true })
 

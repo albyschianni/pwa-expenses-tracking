@@ -4,7 +4,6 @@
       <div
         v-if="open"
         class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-        @click="$emit('close')"
       />
     </Transition>
 
@@ -22,33 +21,62 @@
           </svg>
         </div>
 
-        <h3 class="text-white text-lg font-semibold text-center mb-2">
-          Attiva le notifiche
-        </h3>
-        <p class="text-gray-400 text-sm text-center mb-6">
-          Per ricevere inviti ai gruppi condivisi anche quando l'app è chiusa, attiva le notifiche push.
-        </p>
+        <!-- Default state: ask to activate -->
+        <template v-if="!showDeniedMessage">
+          <h3 class="text-white text-lg font-semibold text-center mb-2">
+            Attiva le notifiche
+          </h3>
+          <p class="text-gray-400 text-sm text-center mb-6">
+            Per ricevere inviti ai gruppi condivisi anche quando l'app è chiusa, attiva le notifiche push.
+          </p>
 
-        <div class="flex gap-3">
+          <div class="flex gap-3">
+            <button
+              @click="$emit('close')"
+              class="flex-1 py-3 bg-gray-700 text-gray-300 rounded-xl font-medium active:bg-gray-600 transition-colors"
+            >
+              Non ora
+            </button>
+            <button
+              @click="handleActivate"
+              class="flex-1 py-3 bg-teal-400 text-gray-900 rounded-xl font-semibold active:bg-teal-500 transition-colors"
+            >
+              Attiva
+            </button>
+          </div>
+        </template>
+
+        <!-- Denied state: guide to Settings -->
+        <template v-else>
+          <h3 class="text-white text-lg font-semibold text-center mb-2">
+            Notifiche disattivate
+          </h3>
+          <p class="text-gray-400 text-sm text-center mb-2">
+            Le notifiche sono state disattivate. Per riattivarle:
+          </p>
+          <div class="bg-gray-700/50 rounded-xl p-4 mb-6">
+            <ol class="text-gray-300 text-sm space-y-1 list-decimal list-inside">
+              <li>Apri <span class="text-white font-medium">Impostazioni</span> del tuo iPhone</li>
+              <li>Vai in <span class="text-white font-medium">Notifiche</span></li>
+              <li>Cerca <span class="text-white font-medium">SpendTrace</span></li>
+              <li>Attiva <span class="text-white font-medium">Consenti notifiche</span></li>
+            </ol>
+          </div>
+
           <button
-            @click="$emit('close')"
-            class="flex-1 py-3 bg-gray-700 text-gray-300 rounded-xl font-medium active:bg-gray-600 transition-colors"
+            @click="handleDismissDenied"
+            class="w-full py-3 bg-teal-400 text-gray-900 rounded-xl font-semibold active:bg-teal-500 transition-colors"
           >
-            Non ora
+            Ho capito
           </button>
-          <button
-            @click="handleActivate"
-            class="flex-1 py-3 bg-teal-400 text-gray-900 rounded-xl font-semibold active:bg-teal-500 transition-colors"
-          >
-            Attiva
-          </button>
-        </div>
+        </template>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { usePushNotifications } from '../composables/usePushNotifications'
 
 defineProps<{ open: boolean }>()
@@ -57,13 +85,23 @@ const emit = defineEmits<{
   (e: 'granted'): void
 }>()
 
-const { requestPermission } = usePushNotifications()
+const { requestPermission, permissionState } = usePushNotifications()
+const showDeniedMessage = ref(false)
 
 async function handleActivate() {
   const granted = await requestPermission()
   if (granted) {
     emit('granted')
+    emit('close')
+  } else if (permissionState.value === 'denied') {
+    showDeniedMessage.value = true
+  } else {
+    emit('close')
   }
+}
+
+function handleDismissDenied() {
+  showDeniedMessage.value = false
   emit('close')
 }
 </script>
