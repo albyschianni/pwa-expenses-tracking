@@ -35,6 +35,37 @@
       </div>
     </button>
 
+    <!-- Bank Connections (feature-gated) -->
+    <div v-if="bankingEnabled" class="mb-4">
+      <BankConnectionsManager
+        @add-connection="$emit('open-bank-connect')"
+      />
+    </div>
+
+    <!-- Bank Transactions shortcut (feature-gated) -->
+    <button
+      v-if="bankingEnabled && hasConnections"
+      @click="$emit('open-bank-transactions')"
+      class="w-full bg-gray-800 rounded-2xl p-4 mb-4 flex items-center gap-4 active:bg-gray-700 transition-colors text-left"
+    >
+      <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+        <svg class="w-5 h-5 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      </div>
+      <div class="flex-1">
+        <p class="text-white font-medium">Transazioni bancarie</p>
+        <p class="text-gray-400 text-sm">Visualizza e categorizza</p>
+      </div>
+      <span
+        v-if="pendingReviewCount > 0"
+        class="w-6 h-6 rounded-full bg-amber-500 text-white text-xs flex items-center justify-center font-bold"
+      >{{ pendingReviewCount > 9 ? '9+' : pendingReviewCount }}</span>
+      <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+
     <!-- Settings List -->
     <div class="bg-gray-800 rounded-2xl overflow-hidden mb-4">
       <!-- Categories -->
@@ -877,8 +908,19 @@ import { useAvatar } from '../composables/useAvatar'
 import { useExpenses } from '../composables/useExpenses'
 import { supabase } from '../lib/supabase'
 import { useCategories } from '../composables/useCategories'
+import { useBanking } from '../composables/useBanking'
 import { useSelectedMonth } from '../composables/useSelectedMonth'
 import { APP_VERSION } from '../constants/version'
+import BankConnectionsManager from '../components/BankConnectionsManager.vue'
+
+const props = defineProps<{
+  bankingEnabled: boolean
+}>()
+
+defineEmits<{
+  'open-bank-connect': []
+  'open-bank-transactions': []
+}>()
 
 const { user, signOut, loading, displayName, updateProfile, updatePassword, deleteAccount } = useAuth()
 const { currency, availableCurrencies, setCurrency, currentCurrency } = useCurrency()
@@ -892,6 +934,7 @@ const {
   updateCategory,
   deleteCategory,
 } = useCategories()
+const { hasConnections, pendingReviewCount } = useBanking()
 const { displayMonthYear, monthKey } = useSelectedMonth()
 
 const appVersion = APP_VERSION

@@ -16,6 +16,12 @@
   <!-- Auth Page -->
   <AuthPage v-else-if="!isAuthenticated" />
 
+  <!-- Banking Callback Handler (intercepts /banking/callback before main app) -->
+  <BankCallbackHandler
+    v-else-if="bankingSubPage === 'callback' && isEnabled('banking')"
+    @done="handleBankingCallbackDone"
+  />
+
   <!-- Main App -->
   <div v-else class="relative min-h-screen bg-gray-900">
     <!-- HEADER -->
@@ -72,9 +78,28 @@
         ref="settingsScrollRef"
         class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
       >
-        <SettingsPage />
+        <SettingsPage
+          :banking-enabled="isEnabled('banking')"
+          @open-bank-connect="openBankConnect"
+          @open-bank-transactions="openBankTransactions"
+        />
       </div>
     </KeepAlive>
+
+    <!-- BANKING SUB-PAGES (overlay, feature-gated) -->
+    <div
+      v-if="bankingSubPage === 'connect' && isEnabled('banking')"
+      class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24 z-30"
+    >
+      <BankConnectionPage @back="bankingSubPage = 'none'" />
+    </div>
+
+    <div
+      v-if="bankingSubPage === 'transactions' && isEnabled('banking')"
+      class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24 z-30"
+    >
+      <BankTransactionsPage />
+    </div>
 
     <!-- TAB BAR (includes centered FAB) -->
     <TabBar
@@ -157,6 +182,9 @@ import ResetPasswordPage from "./pages/ResetPasswordPage.vue"
 import SettingsPage from "./pages/SettingsPage.vue"
 import RecurringPage from "./pages/RecurringPage.vue"
 import WalletsPage from "./pages/WalletsPage.vue"
+import BankConnectionPage from "./pages/BankConnectionPage.vue"
+import BankTransactionsPage from "./pages/BankTransactionsPage.vue"
+import BankCallbackHandler from "./components/BankCallbackHandler.vue"
 import { useExpenses, type Expense } from "./composables/useExpenses"
 import { useAuth } from "./composables/useAuth"
 import { useRecurringExpenses, type RecurringExpense } from "./composables/useRecurringExpenses"
@@ -164,6 +192,8 @@ import { useSharedWallets } from "./composables/useSharedWallets"
 import { useWalletInvitations } from "./composables/useWalletInvitations"
 import { usePushNotifications } from "./composables/usePushNotifications"
 import { useCategories } from "./composables/useCategories"
+import { useBanking } from "./composables/useBanking"
+import { useFeatureFlags } from "./composables/useFeatureFlags"
 import WhatsNewModal from "./components/WhatsNewModal.vue"
 import NotificationPermissionDialog from "./components/NotificationPermissionDialog.vue"
 import { useWhatsNew } from "./composables/useWhatsNew"
@@ -181,6 +211,8 @@ const { activeWallet, addWalletTransaction } = useSharedWallets()
 const { fetchPendingInvitations } = useWalletInvitations()
 const { pushSupported, permissionState, checkSubscription } = usePushNotifications()
 const { fetchCategories } = useCategories()
+const { fetchConnections, fetchBankTransactions } = useBanking()
+const { loadFlags, isEnabled } = useFeatureFlags()
 const { checkForUpdates } = useWhatsNew()
 const {
   addRecurringExpense,
@@ -193,10 +225,17 @@ const {
 // Navigation state — check URL for tab parameter (from push notification click)
 const validTabs = ['home', 'graphic', 'wallets', 'recurring', 'settings']
 const urlTab = new URLSearchParams(window.location.search).get('tab')
+
+// Detect banking callback (/banking/callback?code=...&state=...)
+const isBankingCallback = window.location.pathname.includes('/banking/callback')
+const bankingSubPage = ref<'none' | 'callback' | 'connect' | 'transactions'>(
+  isBankingCallback ? 'callback' : 'none'
+)
+
 const activeTab = ref(urlTab && validTabs.includes(urlTab) ? urlTab : 'home')
 
-// Clean up URL parameter
-if (urlTab) {
+// Clean up URL parameter (but not for banking callback — handled by BankCallbackHandler)
+if (urlTab && !isBankingCallback) {
   window.history.replaceState({}, '', window.location.pathname)
 }
 
@@ -206,6 +245,27 @@ navigator.serviceWorker?.addEventListener('message', (event) => {
     activeTab.value = event.data.tab
   }
 })
+
+// Banking callback handler
+function handleBankingCallbackDone(success: boolean) {
+  bankingSubPage.value = 'none'
+  window.history.replaceState({}, '', '/')
+  if (success) {
+    activeTab.value = 'home'
+    // Refresh data after bank connection
+    fetchBankTransactions()
+    fetchConnections()
+  }
+}
+
+// Open banking sub-pages (called from settings or other places)
+function openBankConnect() {
+  bankingSubPage.value = 'connect'
+}
+
+function openBankTransactions() {
+  bankingSubPage.value = 'transactions'
+}
 
 // Scroll refs for each tab
 const homeScrollRef = ref<HTMLElement | null>(null)
@@ -251,10 +311,15 @@ const recurringToEdit = ref<RecurringExpense | null>(null)
 // Parallelize independent fetches, then run auto-generation
 watch(isAuthenticated, async (authenticated) => {
   if (authenticated) {
-    // Categories must load first so expense icons/colors resolve correctly
-    await fetchCategories()
+    // Categories and feature flags must load first
+    await Promise.all([fetchCategories(), loadFlags()])
     await Promise.all([fetchExpenses(), fetchRecurringExpenses()])
     await processAutoGeneration()
+    // Banking: only fetch if feature is enabled for this user
+    if (isEnabled('banking')) {
+      fetchConnections()
+      fetchBankTransactions()
+    }
     // Defer non-critical tasks so they don't compete with initial UI render
     setTimeout(() => checkForUpdates(), 500)
     setTimeout(() => checkSubscription(), 1500)
