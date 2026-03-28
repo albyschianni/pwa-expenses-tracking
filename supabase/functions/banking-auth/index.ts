@@ -119,7 +119,10 @@ async function completeAuth(userId: string, body: {
   })
 
   const data = await res.json()
-  // data: { session_id, accounts: [uid1, uid2], aspsp, access: { valid_until } }
+  // data.accounts can be UIDs (strings) or full account objects with .uid field
+  const accountUids: string[] = (data.accounts || []).map((a: any) =>
+    typeof a === 'string' ? a : a.uid
+  )
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -131,7 +134,7 @@ async function completeAuth(userId: string, body: {
     .from('bank_connections')
     .update({
       session_id: data.session_id,
-      account_ids: data.accounts,
+      account_ids: accountUids,
       status: 'active',
       consent_expires_at: data.access?.valid_until,
       updated_at: new Date().toISOString(),
@@ -147,7 +150,7 @@ async function completeAuth(userId: string, body: {
 
   return new Response(JSON.stringify({
     session_id: data.session_id,
-    accounts: data.accounts,
+    accounts: accountUids,
     valid_until: data.access?.valid_until,
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 }

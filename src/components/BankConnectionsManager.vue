@@ -94,8 +94,20 @@
             Rinnova consenso
           </button>
 
+          <!-- Disconnetti (solo attive) -->
           <button
+            v-if="conn.status === 'active'"
             @click="handleDisconnect(conn)"
+            class="px-3 bg-gray-700 rounded-lg py-2 text-sm text-gray-400 active:bg-gray-600 transition-colors"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.181 8.68a4.503 4.503 0 011.903 6.405m-9.768-2.782L3.56 14.06a4.5 4.5 0 006.364 6.365l.707-.707m6.768-10.036l1.756-1.757a4.5 4.5 0 00-6.364-6.364l-.707.707" />
+            </svg>
+          </button>
+
+          <!-- Elimina (tutte) -->
+          <button
+            @click="handleDelete(conn)"
             class="px-3 bg-gray-700 rounded-lg py-2 text-sm text-red-400 active:bg-gray-600 transition-colors"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -133,6 +145,33 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Confirm delete -->
+    <Transition name="fade">
+      <div v-if="deleteTarget" class="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-black/60" @click="deleteTarget = null" />
+        <div class="relative bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
+          <h3 class="text-white font-semibold text-lg mb-2">Elimina connessione?</h3>
+          <p class="text-gray-400 text-sm mb-6">
+            La connessione a {{ deleteTarget.institutionName }} e tutte le transazioni importate verranno eliminate definitivamente.
+          </p>
+          <div class="flex gap-3">
+            <button
+              @click="deleteTarget = null"
+              class="flex-1 bg-gray-700 text-white rounded-xl py-3 font-medium active:bg-gray-600 transition-colors"
+            >
+              Annulla
+            </button>
+            <button
+              @click="confirmDelete"
+              class="flex-1 bg-red-500/15 text-red-400 rounded-xl py-3 font-medium active:bg-red-500/25 transition-colors"
+            >
+              Elimina
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -144,10 +183,11 @@ defineEmits<{
   'add-connection': []
 }>()
 
-const { connections, syncManual, disconnectBank } = useBanking()
+const { connections, syncManual, disconnectBank, deleteConnection } = useBanking()
 
 const syncingId = ref<string | null>(null)
 const disconnectTarget = ref<BankConnection | null>(null)
+const deleteTarget = ref<BankConnection | null>(null)
 
 function statusLabel(status: string): string {
   const labels: Record<string, string> = {
@@ -230,6 +270,20 @@ async function confirmDisconnect() {
     disconnectTarget.value = null
   } catch (e) {
     console.error('Disconnect error:', e)
+  }
+}
+
+function handleDelete(conn: BankConnection) {
+  deleteTarget.value = conn
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value) return
+  try {
+    await deleteConnection(deleteTarget.value.id)
+    deleteTarget.value = null
+  } catch (e) {
+    console.error('Delete error:', e)
   }
 }
 </script>

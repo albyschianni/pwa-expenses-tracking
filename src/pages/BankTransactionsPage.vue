@@ -1,12 +1,19 @@
 <template>
   <div class="px-4 py-6">
-    <!-- Header with sync button -->
+    <!-- Header with back + sync -->
     <div class="flex items-center justify-between mb-4">
-      <div>
-        <h2 class="text-xl font-bold text-white">Transazioni bancarie</h2>
-        <p class="text-gray-400 text-sm mt-0.5">
-          {{ bankTransactions.length }} transazioni importate
-        </p>
+      <div class="flex items-center gap-3">
+        <button @click="$emit('back')" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-800 active:bg-gray-700">
+          <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div>
+          <h2 class="text-xl font-bold text-white">Transazioni bancarie</h2>
+          <p class="text-gray-400 text-sm mt-0.5">
+            {{ bankTransactions.length }} transazioni importate
+          </p>
+        </div>
       </div>
       <button
         @click="handleSync"
@@ -173,6 +180,10 @@ import { ref, computed, onMounted } from 'vue'
 import { useBanking, type BankTransaction } from '../composables/useBanking'
 import { useCategories } from '../composables/useCategories'
 
+const emit = defineEmits<{
+  back: []
+}>()
+
 const {
   bankTransactions,
   loading,
@@ -190,9 +201,11 @@ const filter = ref<'all' | 'uncategorized' | 'income' | 'expense'>('all')
 const categorizeTarget = ref<BankTransaction | null>(null)
 const syncResult = ref<number | null>(null)
 
-const availableCategories = computed(() =>
-  activeCategories.value.filter(c => c.type === 'expense')
-)
+const availableCategories = computed(() => {
+  if (!categorizeTarget.value) return activeCategories.value
+  const type = categorizeTarget.value.creditDebitIndicator === 'CRDT' ? 'income' : 'expense'
+  return activeCategories.value.filter(c => c.type === type)
+})
 
 const filteredTransactions = computed(() => {
   let txs = bankTransactions.value

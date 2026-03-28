@@ -1086,7 +1086,7 @@ function handleExport() {
   }
 
   // Build CSV
-  const header = 'Data,Tipo,Descrizione,Categoria,Importo'
+  const header = 'Data,Tipo,Descrizione,Categoria,Importo,Fonte'
   const rows = [...list]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(e => {
@@ -1095,7 +1095,8 @@ function handleExport() {
       const catLabel = (cat.label as string).replace(/"/g, '""')
       const tipo = e.type === 'income' ? 'Entrata' : 'Spesa'
       const signedAmount = e.type === 'income' ? e.amount.toFixed(2) : (-e.amount).toFixed(2)
-      return `${e.date},"${tipo}","${desc}","${catLabel}",${signedAmount}`
+      const fonte = e.source === 'bank' ? 'Banca' : 'Manuale'
+      return `${e.date},"${tipo}","${desc}","${catLabel}",${signedAmount},"${fonte}"`
     })
 
   const csv = [header, ...rows].join('\n')
@@ -1120,8 +1121,9 @@ async function handleExportAllData() {
 
   try {
     // Fetch all user data in parallel
-    const [expensesRes, recurringRes, categoriesRes] = await Promise.all([
+    const [expensesRes, bankTxRes, recurringRes, categoriesRes] = await Promise.all([
       supabase.from('expenses').select('*').eq('user_id', user.value.id).is('shared_wallet_id', null),
+      supabase.from('bank_transactions').select('*'),
       supabase.from('recurring_expenses').select('*').eq('user_id', user.value.id),
       supabase.from('categories').select('*').eq('user_id', user.value.id),
     ])
@@ -1134,6 +1136,7 @@ async function handleExportAllData() {
         createdAt: user.value.created_at,
       },
       transactions: expensesRes.data || [],
+      bankTransactions: bankTxRes.data || [],
       recurringTransactions: recurringRes.data || [],
       customCategories: categoriesRes.data || [],
     }

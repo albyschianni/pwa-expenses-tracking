@@ -98,14 +98,14 @@
       v-if="bankingSubPage === 'transactions' && isEnabled('banking')"
       class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24 z-30"
     >
-      <BankTransactionsPage />
+      <BankTransactionsPage @back="bankingSubPage = 'none'" />
     </div>
 
     <!-- TAB BAR (includes centered FAB) -->
     <TabBar
       :active-tab="activeTab"
       @fab-click="openCreateExpense"
-      @navigate="activeTab = $event"
+      @navigate="handleTabNavigate"
     />
 
     <!-- MONTH PICKER -->
@@ -144,7 +144,7 @@
     <SideDrawer
       :open="menuOpen"
       @close="menuOpen = false"
-      @navigate="activeTab = $event"
+      @navigate="handleTabNavigate"
     />
 
     <!-- AVATAR VIEWER -->
@@ -259,6 +259,11 @@ function handleBankingCallbackDone(success: boolean) {
 }
 
 // Open banking sub-pages (called from settings or other places)
+function handleTabNavigate(tab: string) {
+  activeTab.value = tab
+  bankingSubPage.value = 'none'
+}
+
 function openBankConnect() {
   bankingSubPage.value = 'connect'
 }

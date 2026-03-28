@@ -5,6 +5,7 @@ import { useSelectedMonth } from './useSelectedMonth'
 import { useCategories } from './useCategories'
 
 export type TransactionType = 'expense' | 'income'
+export type ExpenseSource = 'manual' | 'bank'
 
 export interface Expense {
   id: string
@@ -15,6 +16,7 @@ export interface Expense {
   icon: string
   color: string
   type: TransactionType
+  source: ExpenseSource
 }
 
 export interface Category {
@@ -44,7 +46,7 @@ const error = ref<string | null>(null)
 let currentLoadedMonth: string | null = null
 let watchersInitialized = false
 
-function transformExpense(db: DbExpense): Expense {
+function transformExpense(db: DbExpense & { source?: string }): Expense {
   const txType: TransactionType = db.transaction_type === 'income' ? 'income' : 'expense'
   const cat = getCategoryConfig(db.category_id)
   return {
@@ -56,6 +58,7 @@ function transformExpense(db: DbExpense): Expense {
     icon:        cat.icon,
     color:       cat.color,
     type:        txType,
+    source:      (db.source as ExpenseSource) || 'manual',
   }
 }
 
@@ -97,8 +100,9 @@ export function useExpenses() {
       const { startDate, endDate } = getMonthRange(targetMonth)
 
       const { data, error: fetchError } = await supabase
-        .from('expenses')
+        .from('all_expenses')
         .select('*')
+        .is('shared_wallet_id', null)
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: false })

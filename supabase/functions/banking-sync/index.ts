@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { SignJWT, importPKCS8 } from 'https://esm.sh/jose@5'
+import { sendPushToUser } from '../_shared/push.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,10 +71,10 @@ async function syncConnection(
   let totalImported = 0
 
   for (const accountId of connection.account_ids) {
-    // date_from: ultimo sync o 1 giorno fa
+    // date_from: ultimo sync, oppure 24 mesi fa per il primo sync
     const dateFrom = connection.last_sync_at
       ? new Date(connection.last_sync_at).toISOString().split('T')[0]
-      : new Date(Date.now() - 86400000).toISOString().split('T')[0]
+      : (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 2); return d.toISOString().split('T')[0] })()
     const dateTo = new Date().toISOString().split('T')[0]
 
     let continuationKey: string | null = null
@@ -176,7 +177,23 @@ async function syncConnection(
     })
     .eq('id', connection.id)
 
-  return { connectionId: connection.id, imported: totalImported }
+  // Auto-categorizzazione: applica regole dell'utente alle nuove transazioni
+  let autoCategorized = 0
+  if (totalImported > 0) {
+    const { data: rpcResult, error: rpcError } = await supabase
+      .rpc('apply_categorization_rules', { p_user_id: connection.user_id })
+
+    if (rpcError) {
+      console.error(`Auto-categorization error for user ${connection.user_id}:`, rpcError)
+    } else {
+      autoCategorized = rpcResult || 0
+      if (autoCategorized > 0) {
+        console.log(`Auto-categorized ${autoCategorized} transactions for user ${connection.user_id}`)
+      }
+    }
+  }
+
+  return { connectionId: connection.id, imported: totalImported, autoCategorized }
 }
 
 // ── Handler principale ──────────────────────────────────────
@@ -246,11 +263,43 @@ Deno.serve(async (req) => {
     }
 
     const totalImported = results.reduce((sum, r) => sum + r.imported, 0)
+    const totalAutoCategorized = results.reduce((sum, r) => sum + (r.autoCategorized || 0), 0)
     const errors = results.filter(r => r.error)
+
+    // Push notification per ogni utente con nuove transazioni
+    if (totalImported > 0) {
+      const userIds = [...new Set(connections.map(c => c.user_id))]
+      for (const uid of userIds) {
+        const userImported = results
+          .filter(r => connections.find(c => c.id === r.connectionId)?.user_id === uid)
+          .reduce((sum, r) => sum + r.imported, 0)
+
+        if (userImported > 0) {
+          const userAutoCat = results
+            .filter(r => connections.find(c => c.id === r.connectionId)?.user_id === uid)
+            .reduce((sum, r) => sum + (r.autoCategorized || 0), 0)
+
+          const body = userAutoCat > 0
+            ? `${userImported} nuove transazioni (${userAutoCat} categorizzate automaticamente)`
+            : `${userImported} nuove transazioni dalla banca`
+
+          try {
+            await sendPushToUser(supabase, uid, {
+              title: 'Sync bancario',
+              body,
+              data: { type: 'bank_sync', tab: 'home' },
+            })
+          } catch (pushErr) {
+            console.error(`Push notification error for user ${uid}:`, pushErr)
+          }
+        }
+      }
+    }
 
     return new Response(JSON.stringify({
       synced: connections.length,
       total_imported: totalImported,
+      total_auto_categorized: totalAutoCategorized,
       errors: errors.length > 0 ? errors : undefined,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 

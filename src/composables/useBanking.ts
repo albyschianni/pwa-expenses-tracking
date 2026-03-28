@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
+import { useExpenses } from './useExpenses'
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -89,27 +90,12 @@ function transformTransaction(row: any): BankTransaction {
 }
 
 async function callBankingAuth(action: string, body: Record<string, any> = {}) {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) throw new Error('Non autenticato')
+  const { data, error } = await supabase.functions.invoke('banking-auth', {
+    body: { action, ...body },
+  })
 
-  const res = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/banking-auth`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ action, ...body }),
-    },
-  )
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error || 'Errore chiamata banking')
-  }
-
-  return res.json()
+  if (error) throw new Error(error.message || 'Errore chiamata banking')
+  return data
 }
 
 // ── Composable ──────────────────────────────────────────────
@@ -304,28 +290,15 @@ export function useBanking() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('Non autenticato')
 
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/banking-sync`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ user_id: session.user.id }),
-        },
-      )
+      const { data, error: fnError } = await supabase.functions.invoke('banking-sync', {
+        body: { user_id: session.user.id },
+      })
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }))
-        throw new Error(err.error || 'Errore sync')
-      }
-
-      const data = await res.json()
+      if (fnError) throw new Error(fnError.message || 'Errore sync')
 
       await Promise.all([fetchBankTransactions(), fetchConnections()])
 
-      return data.total_imported || 0
+      return data?.total_imported || 0
     } catch (err: any) {
       error.value = err.message
       throw err
@@ -353,7 +326,29 @@ export function useBanking() {
     await fetchConnections()
   }
 
-  // ── Categorizza transazione bancaria ────────────────────
+  // ── Elimina connessione (e relative transazioni) ──────
+
+  async function deleteConnection(connectionId: string) {
+    // Prima elimina le transazioni associate
+    await supabase
+      .from('bank_transactions')
+      .delete()
+      .eq('connection_id', connectionId)
+
+    const { error: err } = await supabase
+      .from('bank_connections')
+      .delete()
+      .eq('id', connectionId)
+
+    if (err) {
+      console.error('Error deleting connection:', err)
+      throw err
+    }
+
+    await fetchConnections()
+  }
+
+  // ── Categorizza transazione bancaria ─────────────────��──
 
   async function categorizeTransaction(transactionId: string, categoryId: string) {
     const { error: err } = await supabase
@@ -371,16 +366,38 @@ export function useBanking() {
     }
 
     // Aggiorna locale
-    const idx = bankTransactions.value.findIndex(t => t.id === transactionId)
-    if (idx !== -1) {
-      const existing = bankTransactions.value[idx]!
+    const tx = bankTransactions.value.find(t => t.id === transactionId)
+    if (tx) {
+      const idx = bankTransactions.value.indexOf(tx)
       bankTransactions.value[idx] = {
-        ...existing,
+        ...tx,
         categoryId,
         categorizationSource: 'manual',
         reviewed: true,
       }
+
+      // Salva regola auto-categorizzazione per future transazioni
+      const matchValue = tx.counterpartName?.trim()
+      if (matchValue && user.value) {
+        supabase
+          .from('categorization_rules')
+          .upsert({
+            user_id: user.value.id,
+            match_field: 'counterpart_name',
+            match_value: matchValue,
+            match_type: 'exact',
+            category_id: categoryId,
+            usage_count: 1,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id,match_field,match_value' })
+          .then(({ error: ruleErr }) => {
+            if (ruleErr) console.error('Error saving categorization rule:', ruleErr)
+          })
+      }
     }
+
+    // Refresh dashboard: la view all_expenses ora include questa transazione
+    await useExpenses().refresh()
   }
 
   // ── Ignora transazione (reviewed senza categoria) ──────
@@ -425,6 +442,7 @@ export function useBanking() {
     syncTransactions,
     syncManual,
     disconnectBank,
+    deleteConnection,
     categorizeTransaction,
     ignoreTransaction,
   }

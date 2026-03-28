@@ -211,7 +211,12 @@
         <!-- Details -->
         <div class="flex-1 min-w-0">
           <p class="text-white font-medium truncate">{{ expense.description }}</p>
-          <p class="text-gray-400 text-sm">{{ formatDate(expense.date) }}</p>
+          <p class="text-gray-400 text-sm flex items-center gap-1">
+            {{ formatDate(expense.date) }}
+            <svg v-if="expense.source === 'bank'" class="w-3 h-3 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
+          </p>
         </div>
 
         <!-- Amount — green for income, red for expense -->
@@ -272,6 +277,7 @@ interface DisplayTransaction {
   icon: string
   color: string
   type: 'expense' | 'income'
+  source?: 'manual' | 'bank'
   userId?: string
   userEmail?: string
   userDisplayName?: string

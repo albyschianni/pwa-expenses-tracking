@@ -72,8 +72,16 @@
             </div>
           </div>
 
-          <!-- Actions -->
-          <div class="space-y-2">
+          <!-- Bank source indicator -->
+          <div v-if="isBankSource" class="flex items-center gap-2 p-3 rounded-xl bg-teal-400/10 border border-teal-400/20 mb-4">
+            <svg class="w-4 h-4 text-teal-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
+            <span class="text-teal-400 text-xs font-medium">Importata dalla banca</span>
+          </div>
+
+          <!-- Actions (only for manual expenses) -->
+          <div v-if="!isBankSource" class="space-y-2">
             <button
               @click="handleEdit"
               class="w-full flex items-center justify-center gap-3 p-4 rounded-xl font-semibold active:opacity-80 transition-colors"
@@ -158,6 +166,7 @@ watch(() => props.open, (isOpen) => {
 })
 
 const isIncome = computed(() => props.expense?.type === 'income')
+const isBankSource = computed(() => props.expense?.source === 'bank')
 
 const categoryLabel = computed(() => {
   if (!props.expense) return ''
