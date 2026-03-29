@@ -249,9 +249,40 @@ async function getTransactions(userId: string, body: {
     })
     .eq('id', connectionId)
 
+  // Auto-classificazione: regole utente + AI + smart detection
+  let classified = 0
+  if (rows.length > 0) {
+    try {
+      // Fase 1: Regole utente esistenti
+      const { data: rpcResult } = await supabase
+        .rpc('apply_categorization_rules', { p_user_id: userId })
+      classified += rpcResult || 0
+
+      // Fase 2: AI + smart detection (trasferimenti interni, etc.)
+      const classifyRes = await fetch(
+        `${Deno.env.get('SUPABASE_URL')!}/functions/v1/classify-transactions`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_id: userId }),
+        },
+      )
+      if (classifyRes.ok) {
+        const cData = await classifyRes.json()
+        classified += (cData.classified || 0)
+      }
+    } catch (err) {
+      console.error('Auto-classification error:', err)
+    }
+  }
+
   return new Response(JSON.stringify({
     imported: rows.length,
     total: allTransactions.length,
+    classified,
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 }
 

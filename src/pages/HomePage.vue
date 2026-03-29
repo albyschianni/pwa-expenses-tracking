@@ -194,39 +194,70 @@
 
     <!-- Transaction List -->
     <div v-if="localSorted.length > 0" class="space-y-3">
-      <button
+      <div
         v-for="expense in localSorted"
         :key="expense.id"
-        @click="$emit('expense-click', expense)"
-        class="w-full flex items-center gap-3 p-4 bg-gray-800 rounded-2xl active:bg-gray-700 transition-colors text-left"
+        class="relative overflow-hidden rounded-2xl"
       >
-        <!-- Category Icon -->
-        <div
-          class="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0"
-          :style="{ backgroundColor: expense.color }"
-        >
-          {{ expense.icon }}
+        <!-- Swipe action buttons (behind the card) -->
+        <div class="absolute right-0 top-0 bottom-0 flex" style="width: 140px">
+          <button
+            @click.stop="handleSwipeEdit(expense)"
+            class="flex-1 flex flex-col items-center justify-center gap-1 bg-blue-500 active:bg-blue-600 transition-colors"
+          >
+            <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            <span class="text-white text-xs font-medium">Modifica</span>
+          </button>
+          <button
+            @click.stop="handleSwipeDelete(expense.id)"
+            class="flex-1 flex flex-col items-center justify-center gap-1 bg-red-500 active:bg-red-600 transition-colors"
+          >
+            <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span class="text-white text-xs font-medium">Elimina</span>
+          </button>
         </div>
 
-        <!-- Details -->
-        <div class="flex-1 min-w-0">
-          <p class="text-white font-medium truncate">{{ expense.description }}</p>
-          <p class="text-gray-400 text-sm flex items-center gap-1">
-            {{ formatDate(expense.date) }}
-            <svg v-if="expense.source === 'bank'" class="w-3 h-3 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-            </svg>
+        <!-- Swipeable card -->
+        <div
+          class="relative flex items-center gap-3 p-4 bg-gray-800 text-left w-full"
+          :style="getCardStyle(expense.id)"
+          @click="handleCardClick(expense)"
+          @touchstart.passive="onTouchStart($event, expense.id)"
+          @touchmove.passive="onTouchMove"
+          @touchend="onTouchEnd(expense.id)"
+        >
+          <!-- Category Icon -->
+          <div
+            class="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0"
+            :style="{ backgroundColor: expense.color }"
+          >
+            {{ expense.icon }}
+          </div>
+
+          <!-- Details -->
+          <div class="flex-1 min-w-0">
+            <p class="text-white font-medium truncate">{{ expense.description }}</p>
+            <p class="text-gray-400 text-sm flex items-center gap-1">
+              {{ formatDate(expense.date) }}
+              <svg v-if="expense.source === 'bank'" class="w-3 h-3 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+            </p>
+          </div>
+
+          <!-- Amount -->
+          <p
+            class="font-semibold whitespace-nowrap"
+            :class="expense.type === 'income' ? 'text-emerald-400' : 'text-red-400'"
+          >
+            {{ expense.type === 'income' ? '+' : '-' }}{{ formatAmount(expense.amount) }}
           </p>
         </div>
-
-        <!-- Amount — green for income, red for expense -->
-        <p
-          class="font-semibold whitespace-nowrap"
-          :class="expense.type === 'income' ? 'text-emerald-400' : 'text-red-400'"
-        >
-          {{ expense.type === 'income' ? '+' : '-' }}{{ formatAmount(expense.amount) }}
-        </p>
-      </button>
+      </div>
     </div>
   </div>
 </template>
@@ -238,7 +269,7 @@ import { useExpenses } from '../composables/useExpenses'
 import { useCurrency } from '../composables/useCurrency'
 import { useSharedWallets, type SharedWallet } from '../composables/useSharedWallets'
 
-defineEmits(['expense-click'])
+const emit = defineEmits(['expense-click', 'expense-edit', 'expense-delete'])
 
 const { displayMonth } = useSelectedMonth()
 const { expenses, balance, totalExpenses, totalIncome, formatDate } = useExpenses()
@@ -328,6 +359,89 @@ function selectSortMode(mode: SortMode) {
   sortDropdownOpen.value = false
 }
 
+// ── Swipe actions ──────────────────────────────────────────
+const SWIPE_OPEN_WIDTH = 140
+const SWIPE_THRESHOLD = 60
+
+const swipeOpenId = ref<string | null>(null)
+let touchStartX = 0
+let touchStartY = 0
+let touchCurrentX = 0
+let touchingId = ''
+let isDragging = false
+
+function getCardStyle(id: string) {
+  const isOpen = swipeOpenId.value === id
+  const isTouching = touchingId === id && isDragging
+  if (isTouching) {
+    const delta = Math.max(-SWIPE_OPEN_WIDTH, Math.min(0, touchCurrentX - touchStartX))
+    return { transform: `translateX(${delta}px)`, transition: 'none' }
+  }
+  return {
+    transform: `translateX(${isOpen ? -SWIPE_OPEN_WIDTH : 0}px)`,
+    transition: 'transform 0.25s ease',
+  }
+}
+
+function onTouchStart(e: TouchEvent, id: string) {
+  const t = e.touches[0]
+  if (!t) return
+  touchStartX = t.clientX
+  touchStartY = t.clientY
+  touchCurrentX = touchStartX
+  touchingId = id
+  isDragging = false
+}
+
+function onTouchMove(e: TouchEvent) {
+  const t = e.touches[0]
+  if (!t) return
+  touchCurrentX = t.clientX
+  const dx = touchCurrentX - touchStartX
+  const dy = t.clientY - touchStartY
+  if (!isDragging && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 5) {
+    isDragging = true
+    // close any other open item when starting a new drag
+    if (swipeOpenId.value && swipeOpenId.value !== touchingId) {
+      swipeOpenId.value = null
+    }
+  }
+}
+
+function onTouchEnd(id: string) {
+  if (isDragging) {
+    const delta = touchCurrentX - touchStartX
+    if (delta < -SWIPE_THRESHOLD) {
+      swipeOpenId.value = id
+    } else if (delta > SWIPE_THRESHOLD / 2) {
+      swipeOpenId.value = null
+    } else if (swipeOpenId.value !== id) {
+      swipeOpenId.value = null
+    }
+  }
+  isDragging = false
+  touchingId = ''
+}
+
+function handleCardClick(expense: DisplayTransaction) {
+  if (swipeOpenId.value) {
+    swipeOpenId.value = null
+    return
+  }
+  emit('expense-click', expense)
+}
+
+function handleSwipeEdit(expense: DisplayTransaction) {
+  swipeOpenId.value = null
+  emit('expense-edit', expense)
+}
+
+function handleSwipeDelete(id: string) {
+  swipeOpenId.value = null
+  emit('expense-delete', id)
+}
+
+// ── Sorting ────────────────────────────────────────────────
 const localSorted = computed(() => {
   let source = displayTransactions.value
   // Apply user filter (shared wallet only)

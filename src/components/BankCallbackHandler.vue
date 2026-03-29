@@ -44,11 +44,14 @@ const statusMessage = ref('Verifica autorizzazione...')
 
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
-  const code = params.get('code')
-  const error = params.get('error')
+  // Prova prima dall'URL, poi da sessionStorage (salvato prima del login)
+  const code = params.get('code') || sessionStorage.getItem('banking_callback_code')
+  const error = params.get('error') || sessionStorage.getItem('banking_callback_error')
 
-  // Pulisci URL
-  window.history.replaceState({}, '', window.location.pathname)
+  // Pulisci URL e sessionStorage
+  window.history.replaceState({}, '', '/')
+  sessionStorage.removeItem('banking_callback_code')
+  sessionStorage.removeItem('banking_callback_error')
 
   if (error) {
     callbackError.value = error === 'access_denied'

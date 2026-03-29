@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy - Expense Tracker</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111827; color: #d1d5db; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.7; padding: 2rem 1rem; }
+    .container { max-width: 720px; margin: 0 auto; }
+    h1 { color: #00F5D4; font-size: 1.75rem; margin-bottom: 0.5rem; }
+    h2 { color: #f3f4f6; font-size: 1.15rem; margin-top: 2rem; margin-bottom: 0.5rem; }
+    p, li { font-size: 0.95rem; margin-bottom: 0.75rem; }
+    ul { padding-left: 1.5rem; }
+    .updated { color: #6b7280; font-size: 0.85rem; margin-bottom: 2rem; }
+    a { color: #00F5D4; }
+    .back { display: inline-block; margin-top: 2rem; color: #00F5D4; text-decoration: none; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Privacy Policy</h1>
+    <p class="updated">Ultimo aggiornamento: 28 marzo 2026</p>
+
+    <p>Expense Tracker ("l'App") è un'applicazione web progressiva (PWA) per la gestione delle spese personali, sviluppata da Alberto Schianni.</p>
+
+    <h2>1. Titolare del trattamento</h2>
+    <p>Alberto Schianni — <a href="mailto:alberto.schianni.dev@gmail.com">alberto.schianni.dev@gmail.com</a></p>
+
+    <h2>2. Dati raccolti</h2>
+    <ul>
+      <li><strong>Dati di registrazione:</strong> indirizzo email e password (gestiti tramite Supabase Auth).</li>
+      <li><strong>Dati finanziari inseriti manualmente:</strong> importi, descrizioni, categorie e date delle spese/entrate.</li>
+      <li><strong>Dati bancari (opzionale):</strong> se colleghi un conto bancario tramite Enable Banking, vengono sincronizzate le transazioni (importo, data, controparte, IBAN). Non memorizziamo credenziali bancarie: l'autenticazione avviene direttamente con la tua banca tramite il protocollo PSD2/Open Banking.</li>
+      <li><strong>Push subscription:</strong> se attivi le notifiche, memorizziamo l'endpoint del browser per inviarti aggiornamenti.</li>
+      <li><strong>Avatar (opzionale):</strong> immagine del profilo caricata dall'utente.</li>
+    </ul>
+
+    <h2>3. Finalità del trattamento</h2>
+    <ul>
+      <li>Fornirti il servizio di gestione spese.</li>
+      <li>Sincronizzare automaticamente le transazioni dal tuo conto bancario (se attivato).</li>
+      <li>Inviarti notifiche push relative a nuove transazioni o inviti a gruppi condivisi.</li>
+    </ul>
+
+    <h2>4. Base giuridica</h2>
+    <p>Il trattamento si basa sul tuo consenso (art. 6.1.a GDPR) e sull'esecuzione del contratto di servizio (art. 6.1.b GDPR).</p>
+
+    <h2>5. Servizi terzi</h2>
+    <ul>
+      <li><strong>Supabase</strong> (hosting dati, autenticazione) — server EU.</li>
+      <li><strong>Vercel</strong> (hosting frontend).</li>
+      <li><strong>Enable Banking</strong> (connessione bancaria PSD2) — i tuoi dati bancari transitano tramite Enable Banking come AISP autorizzato.</li>
+      <li><strong>Resend</strong> (invio email transazionali).</li>
+    </ul>
+
+    <h2>6. Conservazione dei dati</h2>
+    <p>I tuoi dati vengono conservati finché il tuo account è attivo. Puoi eliminare il tuo account in qualsiasi momento dalla sezione Impostazioni dell'app: tutti i dati verranno cancellati in modo permanente.</p>
+
+    <h2>7. I tuoi diritti</h2>
+    <p>Ai sensi del GDPR e della nLPD svizzera, hai diritto di accesso, rettifica, cancellazione, portabilità e opposizione al trattamento dei tuoi dati. Per esercitare questi diritti contatta: <a href="mailto:alberto.schianni.dev@gmail.com">alberto.schianni.dev@gmail.com</a></p>
+
+    <h2>8. Sicurezza</h2>
+    <p>Tutte le comunicazioni avvengono tramite HTTPS. Le password sono gestite da Supabase Auth con hashing bcrypt. L'accesso bancario utilizza il protocollo PSD2 con Strong Customer Authentication (SCA).</p>
+
+    <h2>9. Cookie</h2>
+    <p>L'App non utilizza cookie di tracciamento o profilazione. Viene utilizzato esclusivamente il localStorage del browser per mantenere la sessione di autenticazione.</p>
+
+    <h2>10. Modifiche</h2>
+    <p>Questa policy può essere aggiornata. L'ultima versione è sempre disponibile a questo indirizzo.</p>
+
+    <a class="back" href="/">← Torna all'app</a>
+  </div>
+</body>
+</html>

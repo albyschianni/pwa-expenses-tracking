@@ -39,7 +39,11 @@
         ref="homeScrollRef"
         class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24"
       >
-        <HomePage @expense-click="openExpenseDetail" />
+        <HomePage
+          @expense-click="openExpenseDetail"
+          @expense-edit="openEditExpense"
+          @expense-delete="handleDeleteExpense"
+        />
       </div>
 
       <div
@@ -228,8 +232,19 @@ const urlTab = new URLSearchParams(window.location.search).get('tab')
 
 // Detect banking callback (/banking/callback?code=...&state=...)
 const isBankingCallback = window.location.pathname.includes('/banking/callback')
+
+// Se arriviamo dal redirect bancario, salviamo code/error in sessionStorage
+// PRIMA dell'auth, così non si perdono dopo il login
+if (isBankingCallback) {
+  const cbParams = new URLSearchParams(window.location.search)
+  const cbCode = cbParams.get('code')
+  const cbError = cbParams.get('error')
+  if (cbCode) sessionStorage.setItem('banking_callback_code', cbCode)
+  if (cbError) sessionStorage.setItem('banking_callback_error', cbError)
+}
+
 const bankingSubPage = ref<'none' | 'callback' | 'connect' | 'transactions'>(
-  isBankingCallback ? 'callback' : 'none'
+  isBankingCallback || sessionStorage.getItem('banking_callback_code') ? 'callback' : 'none'
 )
 
 const activeTab = ref(urlTab && validTabs.includes(urlTab) ? urlTab : 'home')

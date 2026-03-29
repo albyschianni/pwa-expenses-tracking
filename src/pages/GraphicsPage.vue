@@ -198,7 +198,7 @@ const chartType = ref<'expense' | 'income'>('expense')
 const filteredExpenses = computed(() => {
   let source = displayExpenses.value
   if (activeWallet.value && graphUserFilter.value) {
-    source = source.filter((e: any) => e.userId === graphUserFilter.value)
+    source = source.filter((e: any) => e.userId === graphUserFilter.value) as typeof source
   }
   return source.filter(e => e.type === chartType.value)
 })

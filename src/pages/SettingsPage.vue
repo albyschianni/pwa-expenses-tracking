@@ -616,6 +616,27 @@
               </p>
             </div>
 
+            <!-- Legal Links -->
+            <div class="mt-4 pt-4 border-t border-gray-700">
+              <div class="flex justify-center gap-4">
+                <a
+                  href="/privacy.html"
+                  target="_blank"
+                  class="text-gray-400 text-xs hover:text-teal-400 transition-colors"
+                >
+                  Privacy Policy
+                </a>
+                <span class="text-gray-600 text-xs">|</span>
+                <a
+                  href="/terms.html"
+                  target="_blank"
+                  class="text-gray-400 text-xs hover:text-teal-400 transition-colors"
+                >
+                  Termini di Servizio
+                </a>
+              </div>
+            </div>
+
             <!-- Danger Zone -->
             <div class="mt-6 pt-5 border-t border-gray-700">
               <p class="text-gray-500 text-xs font-semibold uppercase tracking-widest mb-3">Zona pericolosa</p>

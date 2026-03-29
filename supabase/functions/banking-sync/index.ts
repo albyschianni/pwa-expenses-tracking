@@ -177,9 +177,15 @@ async function syncConnection(
     })
     .eq('id', connection.id)
 
-  // Auto-categorizzazione: applica regole dell'utente alle nuove transazioni
+  // Auto-categorizzazione a 2 fasi:
+  // 1. Applica regole utente esistenti (istantaneo, gratis)
+  // 2. Chiama classify-transactions per AI + smart detection (trasferimenti interni, etc.)
   let autoCategorized = 0
+  let aiClassified = 0
+  let internalTransfers = 0
+
   if (totalImported > 0) {
+    // Fase 1: Regole utente
     const { data: rpcResult, error: rpcError } = await supabase
       .rpc('apply_categorization_rules', { p_user_id: connection.user_id })
 
@@ -188,12 +194,44 @@ async function syncConnection(
     } else {
       autoCategorized = rpcResult || 0
       if (autoCategorized > 0) {
-        console.log(`Auto-categorized ${autoCategorized} transactions for user ${connection.user_id}`)
+        console.log(`Rules-categorized ${autoCategorized} transactions for user ${connection.user_id}`)
       }
+    }
+
+    // Fase 2: AI classification + smart detection per transazioni ancora non categorizzate
+    try {
+      const classifyRes = await fetch(
+        `${Deno.env.get('SUPABASE_URL')!}/functions/v1/classify-transactions`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_id: connection.user_id }),
+        },
+      )
+
+      if (classifyRes.ok) {
+        const classifyData = await classifyRes.json()
+        aiClassified = classifyData.ai_classified || 0
+        internalTransfers = classifyData.internal_transfers || 0
+        autoCategorized += classifyData.deterministic || 0
+        console.log(`AI classified: ${aiClassified}, internal transfers: ${internalTransfers}, deterministic: ${classifyData.deterministic || 0}`)
+      } else {
+        console.error(`classify-transactions error: ${classifyRes.status} ${await classifyRes.text()}`)
+      }
+    } catch (classifyErr) {
+      console.error('classify-transactions call failed:', classifyErr)
     }
   }
 
-  return { connectionId: connection.id, imported: totalImported, autoCategorized }
+  return {
+    connectionId: connection.id,
+    imported: totalImported,
+    autoCategorized: autoCategorized + aiClassified,
+    internalTransfers,
+  }
 }
 
 // ── Handler principale ──────────────────────────────────────
