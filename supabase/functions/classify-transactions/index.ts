@@ -165,6 +165,11 @@ const INTERNAL_TRANSFER_PATTERNS = {
     /revolut\s+(payments\s+uab|bank\s+uab|ltd|limited).*\b(vilnius|lt|london|gb|uk|dublin|ie)\b/i, // bonifico diretto a Revolut entity
     /n26\s*(gmbh|bank|se)/i,                                            // bonifico verso proprio conto N26
     /wise\s*(europe|payments|asia|ltd)/i,                               // bonifico verso proprio conto Wise
+    /hype\s*(s\.?p\.?a\.?|srl|ricarica)/i,                             // ricarica HYPE da altro conto
+    /flowe\s*(s\.?p\.?a\.?|ricarica)/i,                                 // ricarica Flowe
+    /tinaba/i,                                                          // trasferimento Tinaba
+    /buddybank/i,                                                       // trasferimento BuddyBank
+    /PMNT-ICDT-BOOK/i,                                                  // N26 ISO 20022: internal book transfer
   ],
 }
 
@@ -285,7 +290,7 @@ function deterministicCategory(tx: BankTransaction): string | null {
   if (/stipendio|cedolino/i.test(text)) return 'Stipendio'
 
   // Supermercati italiani noti
-  if (/esselunga|il\s*mio\s*gigante|migross|coop\b|conad|lidl|aldi|eurospin|penny\s*market|pam\b|carrefour|iper\b|simply\b|dok\b|bennet\b|famila/i.test(text)) return 'Spesa'
+  if (/esselunga|il\s*mio\s*gigante|migross|coop\b|conad|lidl|aldi|eurospin|penny\s*market|pam\b|carrefour|iper\b|simply\b|dok\b|bennet\b|famila|despar|interspar|a&o\b|galassia|in's\s*mercato|tigre\b|md\s*discount|vegé\b|sisa\b/i.test(text)) return 'Spesa'
 
   // Farmacie
   if (/\bfarmacia\b|\bfarmacie\b/i.test(text)) return 'Salute'
@@ -758,6 +763,16 @@ function extractMerchantName(description: string): string | null {
 
   // HYPE: prefisso generico su acquisti carta
   cleaned = cleaned.replace(/^PAGAMENTO\s+PRESSO\s+/i, '')
+
+  // CBI Globe (Intesa, BNL, Mediolanum, Widiba, Postepay): prefissi POS standard
+  cleaned = cleaned.replace(/^PAGAMENTO\s+POS\s*[-–]\s*/i, '')
+  cleaned = cleaned.replace(/^ACQUISTO\s+POS\s+(MASTERCARD|VISA|MAESTRO)\s*/i, '')
+  cleaned = cleaned.replace(/^PAGAMENTO\s+CON\s+CARTA\s+PRESSO\s+/i, '')
+  cleaned = cleaned.replace(/^ACQUISTO\s+CARTA\s+/i, '')
+  cleaned = cleaned.replace(/^POS\s+/i, '')
+
+  // UniCredit: data operazione in coda (es. "MERCHANT 07/04/26")
+  cleaned = cleaned.replace(/\s+\d{2}\/\d{2}\/\d{2,4}\s*$/, '')
 
   // Generico: rimuove numeri carta, IBAN, sequenze numeriche lunghe
   cleaned = cleaned.replace(/\*\d+/g, '')
