@@ -17,6 +17,8 @@ export interface DbExpense {
   shared_wallet_id: string | null
   created_at: string
   updated_at: string
+  source?: string
+  reviewed?: boolean
 }
 
 export interface DbCategory {

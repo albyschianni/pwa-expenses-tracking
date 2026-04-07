@@ -200,7 +200,9 @@
         class="relative overflow-hidden rounded-2xl"
       >
         <!-- Swipe action buttons (behind the card) -->
-        <div class="absolute right-0 top-0 bottom-0 flex" style="width: 140px">
+        <div class="absolute right-0 top-0 bottom-0 flex" style="width: 140px"
+          :class="swipeOpenId === expense.id || (touchingId === expense.id && isDragging) ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+        >
           <button
             @click.stop="handleSwipeEdit(expense)"
             class="flex-1 flex flex-col items-center justify-center gap-1 bg-blue-500 active:bg-blue-600 transition-colors"
@@ -223,15 +225,20 @@
 
         <!-- Swipeable card -->
         <div
-          class="relative flex items-center gap-3 p-4 bg-gray-800 text-left w-full"
+          class="relative flex items-center gap-3 p-4 bg-gray-800 text-left w-full min-w-full"
           :style="getCardStyle(expense.id)"
           @click="handleCardClick(expense)"
           @touchstart.passive="onTouchStart($event, expense.id)"
           @touchmove.passive="onTouchMove"
           @touchend="onTouchEnd(expense.id)"
         >
-          <!-- Category Icon -->
+          <!-- Category Icon: prepagata (no description, bank source) → ❓ su sfondo neutro -->
           <div
+            v-if="expense.source === 'bank' && !expense.description"
+            class="w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0 bg-gray-700/50"
+          >❓</div>
+          <div
+            v-else
             class="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0"
             :style="{ backgroundColor: expense.color }"
           >
@@ -240,10 +247,21 @@
 
           <!-- Details -->
           <div class="flex-1 min-w-0">
-            <p class="text-white font-medium truncate">{{ expense.description }}</p>
+            <div class="flex items-center gap-2">
+              <p
+                class="font-medium truncate"
+                :class="expense.source === 'bank' && !expense.description ? 'text-gray-400' : 'text-white'"
+              >{{ expense.description || 'Pagamento prepagata' }}</p>
+              <!-- Badge NEW: solo su transazioni bancarie con descrizione (non prepagata) -->
+              <span
+                v-if="expense.source === 'bank' && !expense.reviewed && expense.description"
+                class="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500 text-white leading-none"
+              >NEW</span>
+            </div>
             <p class="text-gray-400 text-sm flex items-center gap-1">
               {{ formatDate(expense.date) }}
-              <svg v-if="expense.source === 'bank'" class="w-3 h-3 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <span v-if="expense.source === 'bank' && !expense.description" class="text-gray-500"> · Dati non disponibili</span>
+              <svg v-else-if="expense.source === 'bank'" class="w-3 h-3 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
               </svg>
             </p>
@@ -309,6 +327,7 @@ interface DisplayTransaction {
   color: string
   type: 'expense' | 'income'
   source?: 'manual' | 'bank'
+  reviewed?: boolean
   userId?: string
   userEmail?: string
   userDisplayName?: string
@@ -364,15 +383,15 @@ const SWIPE_OPEN_WIDTH = 140
 const SWIPE_THRESHOLD = 60
 
 const swipeOpenId = ref<string | null>(null)
+const touchingId = ref('')
+const isDragging = ref(false)
 let touchStartX = 0
 let touchStartY = 0
 let touchCurrentX = 0
-let touchingId = ''
-let isDragging = false
 
 function getCardStyle(id: string) {
   const isOpen = swipeOpenId.value === id
-  const isTouching = touchingId === id && isDragging
+  const isTouching = touchingId.value === id && isDragging.value
   if (isTouching) {
     const delta = Math.max(-SWIPE_OPEN_WIDTH, Math.min(0, touchCurrentX - touchStartX))
     return { transform: `translateX(${delta}px)`, transition: 'none' }
@@ -389,8 +408,8 @@ function onTouchStart(e: TouchEvent, id: string) {
   touchStartX = t.clientX
   touchStartY = t.clientY
   touchCurrentX = touchStartX
-  touchingId = id
-  isDragging = false
+  touchingId.value = id
+  isDragging.value = false
 }
 
 function onTouchMove(e: TouchEvent) {
@@ -399,17 +418,16 @@ function onTouchMove(e: TouchEvent) {
   touchCurrentX = t.clientX
   const dx = touchCurrentX - touchStartX
   const dy = t.clientY - touchStartY
-  if (!isDragging && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 5) {
-    isDragging = true
-    // close any other open item when starting a new drag
-    if (swipeOpenId.value && swipeOpenId.value !== touchingId) {
+  if (!isDragging.value && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 5) {
+    isDragging.value = true
+    if (swipeOpenId.value && swipeOpenId.value !== touchingId.value) {
       swipeOpenId.value = null
     }
   }
 }
 
 function onTouchEnd(id: string) {
-  if (isDragging) {
+  if (isDragging.value) {
     const delta = touchCurrentX - touchStartX
     if (delta < -SWIPE_THRESHOLD) {
       swipeOpenId.value = id
@@ -419,8 +437,8 @@ function onTouchEnd(id: string) {
       swipeOpenId.value = null
     }
   }
-  isDragging = false
-  touchingId = ''
+  isDragging.value = false
+  touchingId.value = ''
 }
 
 function handleCardClick(expense: DisplayTransaction) {

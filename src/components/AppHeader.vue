@@ -13,8 +13,9 @@
       />
     </button>
 
-    <!-- Center: month selector -->
+    <!-- Center: month selector (hidden when a sub-page overrides date control) -->
     <button
+      v-if="!hideMonthPicker"
       @click="$emit('open-month-picker')"
       class="flex items-center gap-2 text-white text-lg font-semibold active:opacity-70 transition-opacity"
     >
@@ -23,6 +24,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
       </svg>
     </button>
+    <div v-else />
 
     <!-- Right: hamburger menu -->
     <button
@@ -37,10 +39,11 @@
   </header>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { useSelectedMonth } from '../composables/useSelectedMonth'
 import { useAvatar } from '../composables/useAvatar'
 
+defineProps<{ hideMonthPicker?: boolean }>()
 defineEmits(['open-month-picker', 'open-menu', 'open-avatar'])
 
 const { displayMonthYear } = useSelectedMonth()

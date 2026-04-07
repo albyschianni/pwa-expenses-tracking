@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { APP_VERSION } from '../constants/version'
+import { useFeatureFlags } from './useFeatureFlags'
 
 export interface ChangelogHighlight {
   icon: string
@@ -10,6 +11,7 @@ export interface ChangelogEntry {
   version: string
   date: string
   title: string
+  requiredFlag?: string
   highlights: ChangelogHighlight[]
 }
 
@@ -63,10 +65,14 @@ export function useWhatsNew() {
 
       const allEntries: ChangelogEntry[] = await response.json()
 
-      // Filter entries newer than lastSeen, up to and including current version
+      const { isEnabled } = useFeatureFlags()
+
+      // Filter entries newer than lastSeen, up to and including current version,
+      // and only show entries whose requiredFlag (if any) is enabled for this user
       const relevant = allEntries.filter(entry =>
         compareVersions(entry.version, lastSeen) > 0 &&
-        compareVersions(entry.version, APP_VERSION) <= 0
+        compareVersions(entry.version, APP_VERSION) <= 0 &&
+        (!entry.requiredFlag || isEnabled(entry.requiredFlag))
       )
 
       if (relevant.length > 0) {

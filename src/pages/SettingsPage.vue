@@ -39,6 +39,7 @@
     <div v-if="bankingEnabled" class="mb-4">
       <BankConnectionsManager
         @add-connection="$emit('open-bank-connect')"
+        @open-transactions="(id) => $emit('open-bank-transactions', id)"
       />
     </div>
 
@@ -65,6 +66,41 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
       </svg>
     </button>
+
+    <!-- AI & Automazione (feature-gated) -->
+    <div v-if="bankingEnabled && hasConnections" class="bg-gray-800 rounded-2xl overflow-hidden mb-4">
+      <!-- Regole AI -->
+      <button @click="openRulesSheet" class="w-full flex items-center gap-4 p-4 text-left border-b border-gray-700 active:bg-gray-700 transition-colors">
+        <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+          <svg class="w-5 h-5 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        </div>
+        <div class="flex-1">
+          <p class="text-white font-medium">Regole di categorizzazione</p>
+          <p class="text-gray-400 text-sm">{{ categorizationRules.length }} regole apprese dall'AI</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      <!-- Statistiche AI -->
+      <button @click="openAiStatsSheet" class="w-full flex items-center gap-4 p-4 text-left active:bg-gray-700 transition-colors">
+        <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+          <svg class="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        </div>
+        <div class="flex-1">
+          <p class="text-white font-medium">Statistiche AI</p>
+          <p class="text-gray-400 text-sm">Utilizzo categorizzazione automatica</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
 
     <!-- Settings List -->
     <div class="bg-gray-800 rounded-2xl overflow-hidden mb-4">
@@ -918,6 +954,106 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Regole AI Sheet -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="rulesSheetOpen" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" @click="rulesSheetOpen = false" />
+      </Transition>
+      <Transition name="slide-up">
+        <div v-if="rulesSheetOpen" class="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-2xl max-h-[80vh] flex flex-col">
+          <div class="flex items-center justify-between p-4 border-b border-gray-700 shrink-0">
+            <div>
+              <h3 class="text-white font-semibold text-lg">Regole di categorizzazione</h3>
+              <p class="text-gray-400 text-sm">{{ categorizationRules.length }} regole apprese dall'AI</p>
+            </div>
+            <button @click="rulesSheetOpen = false" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-700">
+              <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="overflow-y-auto flex-1 p-4 space-y-2">
+            <div v-if="rulesLoading" class="text-center py-8 text-gray-500 text-sm">Caricamento...</div>
+            <div v-else-if="categorizationRules.length === 0" class="text-center py-8 text-gray-500 text-sm">Nessuna regola ancora. Le regole vengono create automaticamente dall'AI quando classifica con alta confidenza.</div>
+            <div
+              v-for="rule in categorizationRules"
+              :key="rule.id"
+              class="flex items-center gap-3 bg-gray-800 rounded-xl p-3"
+            >
+              <span class="text-xl shrink-0">{{ getCategoryById(rule.category_id)?.icon || '📦' }}</span>
+              <div class="flex-1 min-w-0">
+                <p class="text-white text-sm font-medium truncate">{{ rule.match_value }}</p>
+                <p class="text-gray-400 text-xs">{{ getCategoryById(rule.category_id)?.label || rule.category_id }} · usata {{ rule.usage_count }}x</p>
+              </div>
+              <button @click="deleteRule(rule.id)" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-700 active:bg-red-500/20 transition-colors shrink-0">
+                <svg class="w-4 h-4 text-gray-500 active:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Statistiche AI Sheet -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="aiStatsSheetOpen" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" @click="aiStatsSheetOpen = false" />
+      </Transition>
+      <Transition name="slide-up">
+        <div v-if="aiStatsSheetOpen" class="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-2xl max-h-[80vh] flex flex-col">
+          <div class="flex items-center justify-between p-4 border-b border-gray-700 shrink-0">
+            <h3 class="text-white font-semibold text-lg">Statistiche AI</h3>
+            <button @click="aiStatsSheetOpen = false" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-700">
+              <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="overflow-y-auto flex-1 p-4">
+            <div v-if="aiStatsLoading" class="text-center py-8 text-gray-500 text-sm">Caricamento...</div>
+            <div v-else>
+              <!-- Totali -->
+              <div class="grid grid-cols-3 gap-3 mb-6">
+                <div class="bg-gray-800 rounded-xl p-3 text-center">
+                  <p class="text-purple-400 text-xl font-bold">{{ aiStatsTotals.calls }}</p>
+                  <p class="text-gray-400 text-xs mt-1">Chiamate AI</p>
+                </div>
+                <div class="bg-gray-800 rounded-xl p-3 text-center">
+                  <p class="text-teal-400 text-xl font-bold">{{ aiStatsTotals.classified }}</p>
+                  <p class="text-gray-400 text-xs mt-1">Classificate</p>
+                </div>
+                <div class="bg-gray-800 rounded-xl p-3 text-center">
+                  <p class="text-amber-400 text-xl font-bold">{{ aiStatsTotals.tokensK }}k</p>
+                  <p class="text-gray-400 text-xs mt-1">Token usati</p>
+                </div>
+              </div>
+
+              <!-- Tabella ultimi 7 giorni -->
+              <p class="text-gray-400 text-xs uppercase font-medium mb-3">Ultimi 7 giorni</p>
+              <div v-if="aiStatsRows.length === 0" class="text-center py-4 text-gray-600 text-sm">Nessuna attività AI registrata</div>
+              <div v-else class="space-y-2">
+                <div v-for="row in aiStatsRows" :key="row.date" class="flex items-center gap-3 bg-gray-800 rounded-xl px-3 py-2">
+                  <p class="text-gray-400 text-sm w-20 shrink-0">{{ formatStatsDate(row.date) }}</p>
+                  <div class="flex-1 flex items-center gap-4 text-sm">
+                    <span class="text-purple-400">{{ row.ai_calls }} chiamate</span>
+                    <span class="text-teal-400">{{ row.transactions_classified }} tx</span>
+                    <span class="text-gray-500">{{ Math.round((row.total_input_tokens + row.total_output_tokens) / 1000) }}k tok</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Limite giornaliero -->
+              <div class="mt-6 bg-gray-800 rounded-xl p-3">
+                <p class="text-gray-400 text-xs uppercase font-medium mb-2">Limite giornaliero</p>
+                <div class="flex items-center gap-3">
+                  <div class="flex-1 bg-gray-700 rounded-full h-2">
+                    <div class="bg-purple-400 h-2 rounded-full transition-all" :style="{ width: `${Math.min(100, (aiStatsTodayCalls / 50) * 100)}%` }" />
+                  </div>
+                  <p class="text-gray-400 text-xs shrink-0">{{ aiStatsTodayCalls }}/50</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -940,7 +1076,7 @@ const props = defineProps<{
 
 defineEmits<{
   'open-bank-connect': []
-  'open-bank-transactions': []
+  'open-bank-transactions': [connectionId?: string]
 }>()
 
 const { user, signOut, loading, displayName, updateProfile, updatePassword, deleteAccount } = useAuth()
@@ -954,6 +1090,7 @@ const {
   addCategory,
   updateCategory,
   deleteCategory,
+  getCategoryById,
 } = useCategories()
 const { hasConnections, pendingReviewCount } = useBanking()
 const { displayMonthYear, monthKey } = useSelectedMonth()
@@ -964,6 +1101,66 @@ const currencyPickerOpen = ref(false)
 const profileSheetOpen = ref(false)
 const categoriesSheetOpen = ref(false)
 const privacySheetOpen = ref(false)
+const rulesSheetOpen = ref(false)
+const aiStatsSheetOpen = ref(false)
+
+// ── Regole AI ────────────────────────────────────────────────
+const categorizationRules = ref<{ id: string; match_value: string; category_id: string; usage_count: number }[]>([])
+const rulesLoading = ref(false)
+
+async function openRulesSheet() {
+  rulesSheetOpen.value = true
+  if (categorizationRules.value.length > 0) return
+  rulesLoading.value = true
+  const { data } = await supabase
+    .from('categorization_rules')
+    .select('id, match_value, category_id, usage_count')
+    .eq('user_id', user.value!.id)
+    .order('usage_count', { ascending: false })
+  categorizationRules.value = data || []
+  rulesLoading.value = false
+}
+
+async function deleteRule(ruleId: string) {
+  await supabase.from('categorization_rules').delete().eq('id', ruleId)
+  categorizationRules.value = categorizationRules.value.filter(r => r.id !== ruleId)
+}
+
+// ── Statistiche AI ───────────────────────────────────────────
+const aiStatsLoading = ref(false)
+const aiStatsRows = ref<{ date: string; ai_calls: number; transactions_classified: number; total_input_tokens: number; total_output_tokens: number }[]>([])
+
+const aiStatsTotals = computed(() => ({
+  calls: aiStatsRows.value.reduce((s, r) => s + r.ai_calls, 0),
+  classified: aiStatsRows.value.reduce((s, r) => s + r.transactions_classified, 0),
+  tokensK: Math.round(aiStatsRows.value.reduce((s, r) => s + r.total_input_tokens + r.total_output_tokens, 0) / 1000),
+}))
+
+const aiStatsTodayCalls = computed(() => {
+  const today = new Date().toISOString().split('T')[0]
+  return aiStatsRows.value.find(r => r.date === today)?.ai_calls || 0
+})
+
+async function openAiStatsSheet() {
+  aiStatsSheetOpen.value = true
+  if (aiStatsRows.value.length > 0) return
+  aiStatsLoading.value = true
+  const since = new Date()
+  since.setDate(since.getDate() - 7)
+  const { data } = await supabase
+    .from('ai_usage_log')
+    .select('date, ai_calls, transactions_classified, total_input_tokens, total_output_tokens')
+    .eq('user_id', user.value!.id)
+    .gte('date', since.toISOString().split('T')[0])
+    .order('date', { ascending: false })
+  aiStatsRows.value = data || []
+  aiStatsLoading.value = false
+}
+
+function formatStatsDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+}
 const privacyLang = ref<'it' | 'en'>('it')
 const passwordEditMode = ref(false)
 const emailEditMode = ref(false)

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS categorization_rules (
 -- RLS
 ALTER TABLE categorization_rules ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users manage own rules" ON categorization_rules;
 CREATE POLICY "Users manage own rules"
   ON categorization_rules FOR ALL
   USING (auth.uid() = user_id)

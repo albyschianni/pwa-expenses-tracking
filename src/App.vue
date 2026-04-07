@@ -1,6 +1,9 @@
 <template>
+  <!-- Maintenance Overlay (shown first if maintenance_mode is enabled) -->
+  <MaintenanceOverlay v-if="maintenanceMode" />
+
   <!-- Loading State -->
-  <div v-if="authLoading" class="min-h-screen bg-gray-900 flex items-center justify-center">
+  <div v-else-if="authLoading" class="min-h-screen bg-gray-900 flex items-center justify-center">
     <div class="text-center">
       <svg class="w-12 h-12 mx-auto text-teal-400 animate-spin" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -26,6 +29,7 @@
   <div v-else class="relative min-h-screen bg-gray-900">
     <!-- HEADER -->
     <AppHeader
+      :hide-month-picker="bankingSubPage === 'transactions'"
       @open-month-picker="monthPickerOpen = true"
       @open-menu="menuOpen = true"
       @open-avatar="avatarViewerOpen = true"
@@ -87,6 +91,7 @@
           @open-bank-connect="openBankConnect"
           @open-bank-transactions="openBankTransactions"
         />
+
       </div>
     </KeepAlive>
 
@@ -102,7 +107,7 @@
       v-if="bankingSubPage === 'transactions' && isEnabled('banking')"
       class="fixed inset-0 top-16 bottom-0 overflow-y-auto bg-gray-900 pb-24 z-30"
     >
-      <BankTransactionsPage @back="bankingSubPage = 'none'" />
+      <BankTransactionsPage :initial-connection-id="bankTransactionsConnectionId" @back="bankingSubPage = 'none'" />
     </div>
 
     <!-- TAB BAR (includes centered FAB) -->
@@ -179,6 +184,7 @@ import ExpenseDetailDialog from "./components/ExpenseDetailDialog.vue"
 import RecurringExpenseDialog from "./components/RecurringExpenseDialog.vue"
 import SideDrawer from "./components/SideDrawer.vue"
 import AvatarViewer from "./components/AvatarViewer.vue"
+import MaintenanceOverlay from "./components/MaintenanceOverlay.vue"
 import HomePage from "./pages/HomePage.vue"
 import GraphicsPage from "./pages/GraphicsPage.vue"
 import AuthPage from "./pages/AuthPage.vue"
@@ -209,7 +215,7 @@ if ('serviceWorker' in navigator) {
   })
 }
 
-const { addExpense, updateExpense, deleteExpense, fetchExpenses } = useExpenses()
+const { addExpense, updateExpense, deleteExpense, fetchExpenses, markBankTransactionReviewed, scheduleMarkAllReviewed } = useExpenses()
 const { isAuthenticated, isPasswordRecovery, loading: authLoading } = useAuth()
 const { activeWallet, addWalletTransaction } = useSharedWallets()
 const { fetchPendingInvitations } = useWalletInvitations()
@@ -225,6 +231,9 @@ const {
   fetchRecurringExpenses,
   processAutoGeneration
 } = useRecurringExpenses()
+
+// Maintenance mode state
+const maintenanceMode = ref(false)
 
 // Navigation state — check URL for tab parameter (from push notification click)
 const validTabs = ['home', 'graphic', 'wallets', 'recurring', 'settings']
@@ -283,7 +292,10 @@ function openBankConnect() {
   bankingSubPage.value = 'connect'
 }
 
-function openBankTransactions() {
+const bankTransactionsConnectionId = ref<string | undefined>(undefined)
+
+function openBankTransactions(connectionId?: string) {
+  bankTransactionsConnectionId.value = connectionId
   bankingSubPage.value = 'transactions'
 }
 
@@ -333,27 +345,35 @@ watch(isAuthenticated, async (authenticated) => {
   if (authenticated) {
     // Categories and feature flags must load first
     await Promise.all([fetchCategories(), loadFlags()])
-    await Promise.all([fetchExpenses(), fetchRecurringExpenses()])
-    await processAutoGeneration()
-    // Banking: only fetch if feature is enabled for this user
-    if (isEnabled('banking')) {
-      fetchConnections()
-      fetchBankTransactions()
-    }
-    // Defer non-critical tasks so they don't compete with initial UI render
-    setTimeout(() => checkForUpdates(), 500)
-    setTimeout(() => checkSubscription(), 1500)
+    
+    // Check maintenance mode status
+    maintenanceMode.value = isEnabled('maintenance_mode')
+    
+    // If in maintenance mode, skip the rest of initialization
+    if (!maintenanceMode.value) {
+      await Promise.all([fetchExpenses(), fetchRecurringExpenses()])
+      scheduleMarkAllReviewed()
+      await processAutoGeneration()
+      // Banking: only fetch if feature is enabled for this user
+      if (isEnabled('banking')) {
+        fetchConnections()
+        fetchBankTransactions()
+      }
+      // Defer non-critical tasks so they don't compete with initial UI render
+      setTimeout(() => checkForUpdates(), 500)
+      setTimeout(() => checkSubscription(), 1500)
 
-    // Auto-prompt push notifications for installed PWA users
-    const isInstalledPwa = window.matchMedia('(display-mode: standalone)').matches
-      || (navigator as any).standalone === true
-    if (isInstalledPwa && pushSupported.value && permissionState.value !== 'granted') {
-      // Show after WhatsNew modal has had time to appear and be dismissed
-      setTimeout(() => {
-        if (permissionState.value !== 'granted') {
-          showPushPrompt.value = true
-        }
-      }, 2500)
+      // Auto-prompt push notifications for installed PWA users
+      const isInstalledPwa = window.matchMedia('(display-mode: standalone)').matches
+        || (navigator as any).standalone === true
+      if (isInstalledPwa && pushSupported.value && permissionState.value !== 'granted') {
+        // Show after WhatsNew modal has had time to appear and be dismissed
+        setTimeout(() => {
+          if (permissionState.value !== 'granted') {
+            showPushPrompt.value = true
+          }
+        }, 2500)
+      }
     }
   }
 }, { immediate: true })
@@ -379,6 +399,7 @@ function openCreateExpense() {
 function openExpenseDetail(expense: Expense) {
   selectedExpense.value = expense
   expenseDetailOpen.value = true
+  markBankTransactionReviewed(expense.id)
 }
 
 // ============================================================

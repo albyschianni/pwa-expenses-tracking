@@ -17,6 +17,8 @@ export interface Expense {
   color: string
   type: TransactionType
   source: ExpenseSource
+  reviewed: boolean
+  connectionId?: string | null
 }
 
 export interface Category {
@@ -46,19 +48,21 @@ const error = ref<string | null>(null)
 let currentLoadedMonth: string | null = null
 let watchersInitialized = false
 
-function transformExpense(db: DbExpense & { source?: string }): Expense {
+function transformExpense(db: DbExpense & { source?: string; reviewed?: boolean; connection_id?: string | null }): Expense {
   const txType: TransactionType = db.transaction_type === 'income' ? 'income' : 'expense'
   const cat = getCategoryConfig(db.category_id)
   return {
-    id:          db.id,
-    description: db.description,
-    date:        db.date,
-    amount:      Number(db.amount),
-    category:    db.category_id,
-    icon:        cat.icon,
-    color:       cat.color,
-    type:        txType,
-    source:      (db.source as ExpenseSource) || 'manual',
+    id:           db.id,
+    description:  db.description,
+    date:         db.date,
+    amount:       Number(db.amount),
+    category:     db.category_id,
+    icon:         cat.icon,
+    color:        cat.color,
+    type:         txType,
+    source:       (db.source as ExpenseSource) || 'manual',
+    reviewed:     db.reviewed !== false,
+    connectionId: db.connection_id ?? null,
   }
 }
 
@@ -102,6 +106,7 @@ export function useExpenses() {
       const { data, error: fetchError } = await supabase
         .from('all_expenses')
         .select('*')
+        .eq('user_id', user.value.id)
         .is('shared_wallet_id', null)
         .gte('date', startDate)
         .lte('date', endDate)
@@ -222,6 +227,63 @@ export function useExpenses() {
     error.value = null
 
     try {
+      // Determina se è una transazione bancaria
+      const existing = expenses.value.find(e => e.id === id)
+      const isBankTx = existing?.source === 'bank'
+
+      if (isBankTx) {
+        // Aggiorna bank_transactions
+        const bankUpdateData: Record<string, any> = { reviewed: true }
+        if (data.category !== undefined) bankUpdateData.category_id = data.category
+
+        const { error: updateError } = await supabase
+          .from('bank_transactions')
+          .update(bankUpdateData)
+          .eq('id', id)
+
+        if (updateError) throw updateError
+
+        // Apprendi la correzione manuale: crea regola per la prossima volta
+        if (data.category !== undefined && existing?.description) {
+          // Rimuove parti variabili (data operazione, numero carta) per estrarre solo il merchant
+          let merchantKey = existing.description
+          merchantKey = merchantKey.replace(/Carta\s*N\.\s*[\*\d\s]+/gi, '')
+          merchantKey = merchantKey.replace(/Data\s*operazione\s*\d{2}\/\d{2}\/\d{2,4}/gi, '')
+          merchantKey = merchantKey.replace(/Data\s*accredito:\s*\d{2}\/\d{2}\/\d{4}/gi, '')
+          merchantKey = merchantKey.replace(/\*\d+/g, '')
+          merchantKey = merchantKey.trim().replace(/\s+/g, ' ').toUpperCase()
+
+          if (merchantKey.length >= 3) {
+            await supabase
+              .from('categorization_rules')
+              .upsert({
+                user_id: user.value.id,
+                match_field: 'description',
+                match_value: merchantKey,
+                match_type: 'contains',
+                category_id: data.category,
+                priority: 20,
+                usage_count: 1,
+              }, { onConflict: 'user_id,match_value,match_field' })
+          }
+        }
+
+        // Aggiorna lo stato locale
+        if (existing) {
+          const updatedExpense: Expense = {
+            ...existing,
+            category: data.category ?? existing.category,
+            ...getCategoryConfig(data.category ?? existing.category),
+            reviewed: true,
+          }
+          const index = expenses.value.findIndex(e => e.id === id)
+          if (index !== -1) expenses.value[index] = updatedExpense
+        }
+
+        return true
+      }
+
+      // Aggiorna expenses (manuale)
       type UpdatePayload = {
         description?:      string
         date?:             string
@@ -268,6 +330,39 @@ export function useExpenses() {
     } finally {
       loading.value = false
     }
+  }
+
+  async function markBankTransactionReviewed(id: string) {
+    const expense = expenses.value.find(e => e.id === id)
+    if (!expense || expense.source !== 'bank' || expense.reviewed) return
+
+    await supabase
+      .from('bank_transactions')
+      .update({ reviewed: true })
+      .eq('id', id)
+
+    const index = expenses.value.findIndex(e => e.id === id)
+    if (index !== -1) {
+      expenses.value[index] = { ...expenses.value[index]!, reviewed: true }
+    }
+  }
+
+  // Marca tutte le transazioni bancarie non revisionate come "viste" nel DB
+  // ma senza toccare lo stato locale — così i badge restano visibili questa sessione
+  // e spariscono alla prossima apertura dell'app
+  function scheduleMarkAllReviewed() {
+    const unreviewedIds = expenses.value
+      .filter(e => e.source === 'bank' && !e.reviewed)
+      .map(e => e.id)
+
+    if (unreviewedIds.length === 0) return
+
+    setTimeout(async () => {
+      await supabase
+        .from('bank_transactions')
+        .update({ reviewed: true })
+        .in('id', unreviewedIds)
+    }, 5000)
   }
 
   async function deleteExpense(id: string) {
@@ -318,5 +413,7 @@ export function useExpenses() {
     getExpense,
     fetchExpenses,
     refresh,
+    markBankTransactionReviewed,
+    scheduleMarkAllReviewed,
   }
 }

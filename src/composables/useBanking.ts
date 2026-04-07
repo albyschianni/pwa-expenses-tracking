@@ -3,6 +3,20 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import { useExpenses } from './useExpenses'
 
+// ── Utility: estrae nome merchant da description Fineco ─────
+// Rimuove parti variabili (carta, data operazione, ecc.)
+function extractMerchantFromDescription(description: string): string | null {
+  if (!description) return null
+  let s = description
+  s = s.replace(/Carta\s*N\.\s*[\*\d\s]+/gi, '')
+  s = s.replace(/Data\s*operazione\s*\d{2}\/\d{2}\/\d{2,4}/gi, '')
+  s = s.replace(/Data\s*accredito:\s*\d{2}\/\d{2}\/\d{4}/gi, '')
+  s = s.replace(/\*\d+/g, '')
+  s = s.trim().replace(/\s+/g, ' ')
+  if (s.length < 3) return null
+  return s
+}
+
 // ── Types ───────────────────────────────────────────────────
 
 export interface BankConnection {
@@ -34,6 +48,7 @@ export interface BankTransaction {
   categoryId: string | null
   categorizationSource: string | null
   reviewed: boolean
+  isInternalTransfer: boolean
   createdAt: string
 }
 
@@ -85,6 +100,7 @@ function transformTransaction(row: any): BankTransaction {
     categoryId: row.category_id,
     categorizationSource: row.categorization_source,
     reviewed: row.reviewed,
+    isInternalTransfer: row.is_internal_transfer ?? false,
     createdAt: row.created_at,
   }
 }
@@ -297,6 +313,7 @@ export function useBanking() {
       if (fnError) throw new Error(fnError.message || 'Errore sync')
 
       await Promise.all([fetchBankTransactions(), fetchConnections()])
+      await useExpenses().refresh()
 
       return data?.total_imported || 0
     } catch (err: any) {
@@ -377,22 +394,40 @@ export function useBanking() {
       }
 
       // Salva regola auto-categorizzazione per future transazioni
-      const matchValue = tx.counterpartName?.trim()
-      if (matchValue && user.value) {
-        supabase
-          .from('categorization_rules')
-          .upsert({
-            user_id: user.value.id,
-            match_field: 'counterpart_name',
-            match_value: matchValue,
-            match_type: 'exact',
-            category_id: categoryId,
-            usage_count: 1,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id,match_field,match_value' })
-          .then(({ error: ruleErr }) => {
-            if (ruleErr) console.error('Error saving categorization rule:', ruleErr)
-          })
+      if (user.value) {
+        let matchField: string
+        let matchValue: string | null
+        let matchType: string
+
+        if (tx.counterpartName?.trim()) {
+          // Controparte nota → match esatto su counterpart_name
+          matchField = 'counterpart_name'
+          matchValue = tx.counterpartName.trim()
+          matchType = 'exact'
+        } else {
+          // Controparte null (es. pagamenti carta) → estrai merchant da description
+          matchField = 'description'
+          matchValue = extractMerchantFromDescription(tx.description || '')
+          matchType = 'contains'
+        }
+
+        if (matchValue) {
+          supabase
+            .from('categorization_rules')
+            .upsert({
+              user_id: user.value.id,
+              match_field: matchField,
+              match_value: matchValue.toUpperCase(),
+              match_type: matchType,
+              category_id: categoryId,
+              priority: 20,
+              usage_count: 1,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id,match_field,match_value' })
+            .then(({ error: ruleErr }) => {
+              if (ruleErr) console.error('Error saving categorization rule:', ruleErr)
+            })
+        }
       }
     }
 

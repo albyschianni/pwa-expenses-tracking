@@ -30,8 +30,10 @@ const LIMITS = {
   // Max tokens nella risposta AI (limita costo per chiamata)
   MAX_TOKENS_PER_AI_CALL: 1024,
 
-  // Confidence minima per assegnare categoria
-  MIN_CONFIDENCE: 0.6,
+  // Confidence minima per assegnare categoria specifica
+  MIN_CONFIDENCE: 0.5,
+  // Sotto questa soglia → "Altro" invece di lasciare null
+  MIN_CONFIDENCE_FALLBACK: 0.35,
 
   // Confidence minima per creare regola automatica
   MIN_CONFIDENCE_FOR_RULE: 0.85,
@@ -56,7 +58,7 @@ async function checkAndIncrementRateLimit(
   const userCalls = userUsage?.ai_calls || 0
 
   if (userCalls >= LIMITS.MAX_AI_CALLS_PER_USER_PER_DAY) {
-    console.warn(`Rate limit hit for user ${userId}: ${userCalls}/${LIMITS.MAX_AI_CALLS_PER_USER_PER_DAY} calls today`)
+    console.log(`AI rate limit reached for user ${userId}: ${userCalls}/${LIMITS.MAX_AI_CALLS_PER_USER_PER_DAY} calls today`)
     return {
       allowed: false,
       reason: `Limite giornaliero AI raggiunto (${LIMITS.MAX_AI_CALLS_PER_USER_PER_DAY} chiamate/giorno). Le transazioni verranno classificate domani.`,
@@ -72,7 +74,7 @@ async function checkAndIncrementRateLimit(
   const globalCalls = (globalUsage || []).reduce((sum: number, row: any) => sum + (row.ai_calls || 0), 0)
 
   if (globalCalls >= LIMITS.MAX_AI_CALLS_GLOBAL_PER_DAY) {
-    console.warn(`Global rate limit hit: ${globalCalls}/${LIMITS.MAX_AI_CALLS_GLOBAL_PER_DAY} calls today`)
+    console.log(`AI global rate limit reached: ${globalCalls}/${LIMITS.MAX_AI_CALLS_GLOBAL_PER_DAY} calls today`)
     return {
       allowed: false,
       reason: 'Limite giornaliero globale AI raggiunto. Riprovare domani.',
@@ -125,22 +127,6 @@ async function logAIUsage(
 }
 
 // ══════════════════════════════════════════════════════════════
-// SICUREZZA — Solo chiamate interne (service_role_key)
-// ══════════════════════════════════════════════════════════════
-
-function verifyInternalCall(req: Request): boolean {
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader) return false
-
-  const token = authHeader.replace('Bearer ', '')
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-
-  // La funzione accetta SOLO il service_role_key
-  // NON è chiamabile dal frontend con token utente
-  return token === serviceRoleKey
-}
-
-// ══════════════════════════════════════════════════════════════
 // RILEVAMENTO TRASFERIMENTI INTERNI (deterministico, no AI)
 // ══════════════════════════════════════════════════════════════
 
@@ -175,6 +161,10 @@ const INTERNAL_TRANSFER_PATTERNS = {
     /vers\.\s*su\s*carta/i,
     /accredito\s*da\s*conto/i,
     /bonifico\s*a\s*favore\s*proprio/i,
+    /revolut\*+\d+\*\s*(dublin|ireland|ie)/i,                          // Visa Debit Fineco → Revolut card
+    /revolut\s+(payments\s+uab|bank\s+uab|ltd|limited).*\b(vilnius|lt|london|gb|uk|dublin|ie)\b/i, // bonifico diretto a Revolut entity
+    /n26\s*(gmbh|bank|se)/i,                                            // bonifico verso proprio conto N26
+    /wise\s*(europe|payments|asia|ltd)/i,                               // bonifico verso proprio conto Wise
   ],
 }
 
@@ -214,6 +204,22 @@ function detectInternalTransfer(tx: BankTransaction, userIbans: string[]): boole
   return false
 }
 
+// Transazioni carta prepagata: raw_data senza entry_reference, transaction_id, remittance vuota o solo 'transazione'
+// Fineco non manda dati utili per questi acquisti → non ha senso chiamare l'AI
+function isEmptyCardTransaction(tx: BankTransaction): boolean {
+  const raw = tx.raw_data
+  if (!raw) return false
+  const noRef = !raw.entry_reference && !raw.transaction_id
+  // Remittance è vuota O contiene solo la parola 'transazione' (non informativa)
+  const remittanceText = Array.isArray(raw.remittance_information)
+    ? raw.remittance_information.join(' ').trim().toLowerCase()
+    : ''
+  const noRemittance = remittanceText === '' || remittanceText === 'transazione'
+  const noCounterpart = !tx.counterpart_name && !tx.counterpart_iban
+  const noDescription = !tx.description || tx.description.toLowerCase().trim() === 'transazione'
+  return noRef && noRemittance && noCounterpart && noDescription
+}
+
 function detectBankFee(tx: BankTransaction): boolean {
   const bankCode = tx.bank_transaction_code?.code || ''
   const desc = tx.description || ''
@@ -225,14 +231,85 @@ function detectBankFee(tx: BankTransaction): boolean {
 }
 
 // ══════════════════════════════════════════════════════════════
+// MCC MAPPING (Layer 0 — se presente, gratis e affidabile)
+// ══════════════════════════════════════════════════════════════
+
+const MCC_CATEGORY_MAP: Record<string, string> = {
+  // Supermercati / alimentari
+  '5411': 'Spesa', '5412': 'Spesa', '5422': 'Spesa', '5441': 'Spesa',
+  '5451': 'Spesa', '5462': 'Spesa', '5499': 'Spesa',
+  // Ristoranti / bar / fast food
+  '5812': 'Ristoranti', '5813': 'Ristoranti', '5814': 'Ristoranti',
+  // Carburante
+  '5541': 'Trasporti', '5542': 'Trasporti',
+  // Trasporti pubblici / taxi / parcheggio / pedaggi
+  '4111': 'Trasporti', '4121': 'Trasporti', '4131': 'Trasporti',
+  '4784': 'Trasporti', '7521': 'Trasporti', '7523': 'Trasporti',
+  // Farmacie / salute
+  '5912': 'Salute', '5975': 'Salute',
+  '8011': 'Salute', '8021': 'Salute', '8049': 'Salute', '8099': 'Salute',
+  // Abbonamenti / digitale / telecom
+  '5815': 'Abbonamenti', '5816': 'Abbonamenti', '5817': 'Abbonamenti', '5818': 'Abbonamenti',
+  '4814': 'Abbonamenti', '4899': 'Abbonamenti',
+  // Elettronica
+  '5734': 'Elettronica', '5045': 'Elettronica', '5065': 'Elettronica',
+  // Shopping / abbigliamento / varie
+  '5310': 'Shopping', '5311': 'Shopping', '5331': 'Shopping',
+  '5651': 'Shopping', '5661': 'Shopping', '5691': 'Shopping', '5699': 'Shopping',
+  '5621': 'Shopping', '5945': 'Shopping', '5999': 'Shopping',
+  // Casa / fai da te
+  '5200': 'Casa', '5251': 'Casa', '5712': 'Casa', '5719': 'Casa',
+  // Viaggi / hotel / voli
+  '7011': 'Viaggi', '4722': 'Viaggi', '4112': 'Viaggi',
+  '3000': 'Viaggi', '3001': 'Viaggi', '3002': 'Viaggi', // airline MCCs
+}
+
+function mccCategory(tx: BankTransaction): string | null {
+  if (!tx.merchant_category_code) return null
+  return MCC_CATEGORY_MAP[tx.merchant_category_code] || null
+}
+
+// ══════════════════════════════════════════════════════════════
 // CATEGORIZZAZIONE DETERMINISTICA (Layer 0)
 // ══════════════════════════════════════════════════════════════
 
 function deterministicCategory(tx: BankTransaction): string | null {
   const bankCode = (tx.bank_transaction_code?.code || '').toLowerCase()
+  // Controlla sia description che counterpart_name (es. Revolut manda il merchant in creditor.name)
+  const desc = tx.description || ''
+  const counterpart = tx.counterpart_name || ''
+  const text = [desc, counterpart].filter(Boolean).join(' ')
 
+  // Stipendio (bankCode o testo)
   if (/stipendio|cedolino|salary|payroll/.test(bankCode)) return 'Stipendio'
-  if (/stipendio|cedolino/i.test(tx.description || '')) return 'Stipendio'
+  if (/stipendio|cedolino/i.test(text)) return 'Stipendio'
+
+  // Supermercati italiani noti
+  if (/esselunga|il\s*mio\s*gigante|migross|coop\b|conad|lidl|aldi|eurospin|penny\s*market|pam\b|carrefour|iper\b|simply\b|dok\b|bennet\b|famila/i.test(text)) return 'Spesa'
+
+  // Farmacie
+  if (/\bfarmacia\b|\bfarmacie\b/i.test(text)) return 'Salute'
+
+  // Carburante / stazioni di servizio
+  if (/\beni\b|agip\b|\bq8\b|tamoil|totalerg|\bapi\b|\bip\b\s|carburante|stazione\s*(di\s*servizio)|distributore|benzina|diesel/i.test(text)) return 'Trasporti'
+
+  // Pedaggi / parcheggi
+  if (/autostrade\s*(per|d'italia)?|telepass|\bparcheggio\b|\bparking\b/i.test(text)) return 'Trasporti'
+
+  // Trasporti pubblici italiani + ride sharing internazionali
+  if (/trenitalia|italotreno|\batm\s*milano\b|\batac\b|trenord|frecciarossa|frecciargento|\buber\b|\bfree\s*now\b|\bblablacar\b/i.test(text)) return 'Trasporti'
+
+  // Fast food / ristoranti noti
+  if (/mc\s*donald|burger\s*king|\bkfc\b|\bsubway\b|pizza\s*hut|domino'?s|\bjust\s*eat\b|\bdeliveroo\b|\buber\s*eats\b|glovo/i.test(text)) return 'Ristoranti'
+
+  // Abbonamenti digitali noti (inclusi servizi AI e cloud)
+  if (/netflix|spotify|amazon\s*prime|disney\s*\+|apple\.com\/bill|google\s*(play|storage|one)|youtube\s*premium|dazn\b|anthropic|openai|chatgpt|microsoft\s*365|adobe/i.test(text)) return 'Abbonamenti'
+
+  // Telecom italiani
+  if (/wind\s*tre|tim\s*(s\.?p\.?a\.?)?|vodafone|iliad|fastweb|tiscali|sky\s*(italia)?/i.test(text)) return 'Abbonamenti'
+
+  // E-commerce noti
+  if (/\bamazon\b(?!\s*prime)|\bzalando\b|\bshein\b|\basos\b|\bzara\b/i.test(text)) return 'Shopping'
 
   return null
 }
@@ -271,14 +348,18 @@ async function classifyWithAI(
   ].join('\n')
 
   const txList = transactions.map((tx, i) => {
+    // counterpart_name è il merchant pulito (es. Revolut → "Anthropic")
+    // description è il testo grezzo remittance (es. HYPE → "PAGAMENTO PRESSO APPLE.COM/BILL CORK")
+    const merchant = tx.counterpart_name?.trim()
+      || extractMerchantName(tx.description || '')
+      || tx.description
+      || 'N/A'
     const parts = [
       `${i + 1}.`,
       `Tipo: ${tx.credit_debit_indicator === 'CRDT' ? 'ENTRATA' : 'SPESA'}`,
       `Importo: €${tx.amount}`,
-      `Descrizione: "${tx.description || 'N/A'}"`,
+      `Merchant: "${merchant}"`,
     ]
-    if (tx.counterpart_name) parts.push(`Controparte: "${tx.counterpart_name}"`)
-    if (tx.bank_transaction_code?.code) parts.push(`Codice bancario: "${tx.bank_transaction_code.code}"`)
     if (tx.merchant_category_code) parts.push(`MCC: ${tx.merchant_category_code}`)
     return parts.join(' | ')
   }).join('\n')
@@ -369,14 +450,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // ── SICUREZZA: solo chiamate interne ──
-    if (!verifyInternalCall(req)) {
-      return new Response(JSON.stringify({ error: 'Unauthorized — internal use only' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -444,10 +517,33 @@ Deno.serve(async (req) => {
     }
 
     // 3. Recupera IBAN utente per detect trasferimenti interni
+    // Fonte 1: account_ids delle connessioni bancarie attive → leggi IBAN da tutte le tx storiche
     const userIbans: string[] = []
+
+    // Fonte 2: IBAN dai debtor_account/creditor_account nelle transazioni del batch
     for (const tx of transactions) {
       if (tx.credit_debit_indicator === 'CRDT' && tx.raw_data?.creditor_account?.iban) {
         const normalized = tx.raw_data.creditor_account.iban.toUpperCase()
+        if (!userIbans.includes(normalized)) userIbans.push(normalized)
+      }
+      if (tx.raw_data?.debtor_account?.iban) {
+        const normalized = tx.raw_data.debtor_account.iban.toUpperCase()
+        if (!userIbans.includes(normalized)) userIbans.push(normalized)
+      }
+    }
+
+    // Fonte 3: IBAN da tutte le transazioni storiche dell'utente (copre conti aggiunti in passato)
+    const { data: historicalIbans } = await supabase
+      .from('bank_transactions')
+      .select('raw_data')
+      .eq('user_id', userId)
+      .not('raw_data->debtor_account->iban', 'is', null)
+      .limit(100)
+
+    for (const row of historicalIbans || []) {
+      const iban = row.raw_data?.debtor_account?.iban
+      if (iban) {
+        const normalized = iban.toUpperCase()
         if (!userIbans.includes(normalized)) userIbans.push(normalized)
       }
     }
@@ -481,12 +577,41 @@ Deno.serve(async (req) => {
         continue
       }
 
+      // MCC lookup (se disponibile, più affidabile del testo)
+      const mccCat = mccCategory(tx)
+      if (mccCat) {
+        updates.push({
+          id: tx.id,
+          data: {
+            category_id: mccCat,
+            categorization_source: 'system',
+            reviewed: false,
+          },
+        })
+        deterministicClassified++
+        continue
+      }
+
       const detCategory = deterministicCategory(tx)
       if (detCategory) {
         updates.push({
           id: tx.id,
           data: {
             category_id: detCategory,
+            categorization_source: 'system',
+            reviewed: false,
+          },
+        })
+        deterministicClassified++
+        continue
+      }
+
+      // Transazioni carta prepagata senza dati utili → "Altro" (non vale la pena chiamare AI)
+      if (isEmptyCardTransaction(tx)) {
+        updates.push({
+          id: tx.id,
+          data: {
+            category_id: 'Altro',
             categorization_source: 'system',
             reviewed: false,
           },
@@ -510,7 +635,7 @@ Deno.serve(async (req) => {
 
       if (!rateCheck.allowed) {
         rateLimitHit = true
-        console.warn(`AI skipped for user ${userId}: ${rateCheck.reason}`)
+        console.log(`AI skipped for user ${userId}: ${rateCheck.reason}`)
       } else {
         // Procedi con AI — batch di max BATCH_SIZE
         for (let i = 0; i < toClassifyWithAI.length; i += LIMITS.MAX_BATCH_SIZE) {
@@ -519,6 +644,18 @@ Deno.serve(async (req) => {
 
           totalInputTokens += aiResult.inputTokens
           totalOutputTokens += aiResult.outputTokens
+
+          // Transazioni per cui l'AI non ha dato nessun risultato → fallback "Altro"
+          const classifiedIds = new Set(aiResult.classifications.keys())
+          for (const tx of batch) {
+            if (!classifiedIds.has(tx.id)) {
+              updates.push({
+                id: tx.id,
+                data: { category_id: 'Altro', categorization_source: 'ai_fallback', reviewed: false },
+              })
+              aiClassified++
+            }
+          }
 
           for (const [txId, classification] of aiResult.classifications) {
             if (classification.confidence >= LIMITS.MIN_CONFIDENCE) {
@@ -536,7 +673,7 @@ Deno.serve(async (req) => {
               if (classification.confidence >= LIMITS.MIN_CONFIDENCE_FOR_RULE) {
                 const tx = toClassifyWithAI.find(t => t.id === txId)
                 if (tx) {
-                  const merchantName = extractMerchantName(tx.description || '')
+                  const merchantName = bestMerchantKey(tx)
                   if (merchantName && merchantName.length >= 3) {
                     await supabase
                       .from('categorization_rules')
@@ -554,6 +691,13 @@ Deno.serve(async (req) => {
                   }
                 }
               }
+            } else if (classification.confidence >= LIMITS.MIN_CONFIDENCE_FALLBACK) {
+              // Confidence bassa → assegna comunque ma segnala come low_confidence
+              updates.push({
+                id: txId,
+                data: { category_id: classification.categoryId, categorization_source: 'ai_low_confidence', reviewed: false },
+              })
+              aiClassified++
             }
           }
         }
@@ -602,6 +746,7 @@ function extractMerchantName(description: string): string | null {
 
   let cleaned = description
 
+  // Fineco: boilerplate specifico
   cleaned = cleaned.replace(/Carta\s*N\.\s*\*+\s*\d+/gi, '')
   cleaned = cleaned.replace(/Data\s*operazione\s*\d{2}\/\d{2}\/\d{2,4}/gi, '')
   cleaned = cleaned.replace(/Data\s*accredito:\s*\d{2}\/\d{2}\/\d{4}/gi, '')
@@ -611,6 +756,10 @@ function extractMerchantName(description: string): string | null {
   cleaned = cleaned.replace(/Info-Cli:\s*/gi, '')
   cleaned = cleaned.replace(/Ord:\s*[A-Z\s.]+\s*Ben:\s*/gi, '')
 
+  // HYPE: prefisso generico su acquisti carta
+  cleaned = cleaned.replace(/^PAGAMENTO\s+PRESSO\s+/i, '')
+
+  // Generico: rimuove numeri carta, IBAN, sequenze numeriche lunghe
   cleaned = cleaned.replace(/\*\d+/g, '')
   cleaned = cleaned.replace(/\\\s*\\/g, ' ')
   cleaned = cleaned.replace(/\b[A-Z]{2}\d{2}[A-Z\d]{10,30}\b/g, '')
@@ -618,6 +767,7 @@ function extractMerchantName(description: string): string | null {
 
   cleaned = cleaned.trim()
 
+  // Rimuove codice paese finale (es. "Merchant Name IE" → "Merchant Name")
   const countryMatch = cleaned.match(/^(.+?)\s+[A-Z]{2}\s*$/)
   if (countryMatch) {
     cleaned = countryMatch[1].trim()
@@ -628,4 +778,13 @@ function extractMerchantName(description: string): string | null {
   if (cleaned.length < 3 || cleaned.length > 100) return null
 
   return cleaned
+}
+
+// Restituisce il miglior identificatore merchant per regole/AI:
+// preferisce counterpart_name (pulito, strutturato) su description estratta
+function bestMerchantKey(tx: BankTransaction): string | null {
+  if (tx.counterpart_name && tx.counterpart_name.trim().length >= 3) {
+    return tx.counterpart_name.trim()
+  }
+  return extractMerchantName(tx.description || '')
 }

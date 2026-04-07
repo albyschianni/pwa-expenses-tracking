@@ -34,7 +34,11 @@
         :key="conn.id"
         class="bg-gray-800 rounded-xl p-4"
       >
-        <div class="flex items-center gap-3 mb-3">
+        <!-- Header conto: tap → apre dettaglio transazioni -->
+        <button
+          class="w-full flex items-center gap-3 mb-3 text-left active:opacity-70 transition-opacity"
+          @click="$emit('open-transactions', conn.id)"
+        >
           <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center shrink-0">
             <svg class="w-5 h-5 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -52,7 +56,10 @@
               </span>
             </div>
           </div>
-        </div>
+          <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
 
         <!-- Details -->
         <div class="text-xs text-gray-500 space-y-1 mb-3">
@@ -152,9 +159,13 @@
         <div class="absolute inset-0 bg-black/60" @click="deleteTarget = null" />
         <div class="relative bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
           <h3 class="text-white font-semibold text-lg mb-2">Elimina connessione?</h3>
-          <p class="text-gray-400 text-sm mb-6">
-            La connessione a {{ deleteTarget.institutionName }} e tutte le transazioni importate verranno eliminate definitivamente.
+          <p class="text-gray-400 text-sm mb-4">
+            La connessione a <span class="text-white font-medium">{{ deleteTarget.institutionName }}</span> e tutte le transazioni importate verranno eliminate definitivamente.
           </p>
+          <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-6">
+            <p class="text-amber-400 text-xs font-medium mb-1">⚠️ Perderai le categorizzazioni manuali</p>
+            <p class="text-amber-400/70 text-xs">Le transazioni possono essere reimportate con un nuovo sync, ma le categorizzazioni manuali non sono recuperabili. Per ricollegare la banca usa invece "Disconnetti".</p>
+          </div>
           <div class="flex gap-3">
             <button
               @click="deleteTarget = null"
@@ -181,6 +192,7 @@ import { useBanking, type BankConnection } from '../composables/useBanking'
 
 defineEmits<{
   'add-connection': []
+  'open-transactions': [connectionId: string]
 }>()
 
 const { connections, syncManual, disconnectBank, deleteConnection } = useBanking()

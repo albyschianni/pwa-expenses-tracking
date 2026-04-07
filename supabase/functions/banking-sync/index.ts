@@ -71,64 +71,122 @@ async function syncConnection(
   let totalImported = 0
 
   for (const accountId of connection.account_ids) {
-    // date_from: ultimo sync, oppure 24 mesi fa per il primo sync
-    const dateFrom = connection.last_sync_at
-      ? new Date(connection.last_sync_at).toISOString().split('T')[0]
-      : (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 2); return d.toISOString().split('T')[0] })()
     const dateTo = new Date().toISOString().split('T')[0]
 
-    let continuationKey: string | null = null
+    // Finestre da provare in ordine: usa last_sync_at se disponibile,
+    // altrimenti prova 11 mesi → 90 giorni → 30 giorni (fallback per banche
+    // che limitano la finestra al periodo dalla data di consenso)
+    const dateCandidates: string[] = connection.last_sync_at
+      ? [new Date(connection.last_sync_at).toISOString().split('T')[0]]
+      : (() => {
+          const offsets = [11 * 30, 90, 30] // in giorni
+          return offsets.map(days => {
+            const d = new Date()
+            d.setDate(d.getDate() - days)
+            return d.toISOString().split('T')[0]
+          })
+        })()
+
     let allTransactions: any[] = []
+    let fetchSucceeded = false
+    let rateLimited = false
 
-    do {
-      const params: Record<string, string> = {
-        date_from: dateFrom,
-        date_to: dateTo,
-      }
-      if (continuationKey) params.continuation_key = continuationKey
+    for (const dateFrom of dateCandidates) {
+      if (rateLimited) break
 
-      const res = await ebFetch(`/accounts/${accountId}/transactions`, { params })
+      let continuationKey: string | null = null
+      let batchTransactions: any[] = []
+      let accountError = false
 
-      if (!res.ok) {
-        const errorText = await res.text()
+      do {
+        const params: Record<string, string> = {
+          date_from: dateFrom,
+          date_to: dateTo,
+        }
+        if (continuationKey) params.continuation_key = continuationKey
 
-        // Sessione scaduta → marca connessione come expired
-        if (res.status === 401 || res.status === 403) {
-          await supabase
-            .from('bank_connections')
-            .update({
-              status: 'expired',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', connection.id)
+        const res = await ebFetch(`/accounts/${accountId}/transactions`, { params })
 
-          return {
-            connectionId: connection.id,
-            imported: 0,
-            error: `Session expired (${res.status})`,
+        if (!res.ok) {
+          const errorText = await res.text()
+
+          // Sessione scaduta → marca connessione come expired e interrompi tutto
+          if (res.status === 401 || res.status === 403) {
+            await supabase
+              .from('bank_connections')
+              .update({
+                status: 'expired',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', connection.id)
+
+            return {
+              connectionId: connection.id,
+              imported: totalImported,
+              error: `Session expired (${res.status})`,
+            }
           }
+
+          // 429 = rate limit → non ha senso riprovare con finestra diversa
+          if (res.status === 429) {
+            console.log(`[account ${accountId}] rate limited by bank (429), skipping until tomorrow`)
+            rateLimited = true
+            accountError = true
+            break
+          }
+
+          // 422 = periodo non supportato → prova finestra più corta
+          if (res.status === 422 && !connection.last_sync_at) {
+            console.log(`[account ${accountId}] 422 with dateFrom=${dateFrom}, trying shorter window...`)
+            accountError = true
+            break
+          }
+
+          // Altri errori: logga e passa al prossimo account
+          console.error(`[account ${accountId}] API error ${res.status}: ${errorText}`)
+          accountError = true
+          break
         }
 
-        console.error(`Error fetching transactions for account ${accountId}: ${res.status} ${errorText}`)
-        return {
-          connectionId: connection.id,
-          imported: 0,
-          error: `API error: ${res.status}`,
-        }
-      }
+        const data = await res.json()
+        const txBatch = data.transactions || []
+        console.log(`[account ${accountId}] dateFrom=${dateFrom}: fetched ${txBatch.length} transactions (continuation: ${!!data.continuation_key})`)
+        batchTransactions = batchTransactions.concat(txBatch)
+        continuationKey = data.continuation_key || null
+      } while (continuationKey)
 
-      const data = await res.json()
-      if (data.transactions) {
-        allTransactions = allTransactions.concat(data.transactions)
+      if (!accountError) {
+        allTransactions = batchTransactions
+        fetchSucceeded = true
+        console.log(`[account ${accountId}] success with dateFrom=${dateFrom}, total: ${allTransactions.length}`)
+        break
       }
-      continuationKey = data.continuation_key || null
-    } while (continuationKey)
+    }
+
+    if (!fetchSucceeded) {
+      console.log(`[account ${accountId}] no transactions available (all date windows returned no data)`)
+      continue
+    }
+
+    console.log(`[account ${accountId}] total fetched: ${allTransactions.length}`)
+
+    // Per transazioni senza external_id (es. acquisti carta prepagata Fineco):
+    // genera un ID sintetico stabile basato su data+importo+tipo+posizione nel giorno
+    // In questo modo sono deduplicabili anche senza ID nativo dalla banca
+    const syntheticCounters: Record<string, number> = {}
+    const allTransactionsWithId = allTransactions.map((tx: any) => {
+      if (tx.entry_reference || tx.transaction_id) return tx
+      const base = `${tx.booking_date}_${tx.transaction_amount?.amount}_${tx.credit_debit_indicator}`
+      const count = syntheticCounters[base] ?? 0
+      syntheticCounters[base] = count + 1
+      return { ...tx, _synthetic_id: `synthetic_${base}_${count}` }
+    })
 
     // Trasforma e upsert
-    const rows = allTransactions.map((tx: any) => ({
+    const rows = allTransactionsWithId.map((tx: any) => ({
       user_id: connection.user_id,
       connection_id: connection.id,
-      external_id: tx.entry_reference || tx.transaction_id || null,
+      external_id: tx.entry_reference || tx.transaction_id || tx._synthetic_id || null,
       booking_date: tx.booking_date || null,
       value_date: tx.value_date || null,
       amount: Math.abs(parseFloat(tx.transaction_amount?.amount || '0')),
@@ -148,12 +206,13 @@ async function syncConnection(
     }))
 
     if (rows.length > 0) {
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from('bank_transactions')
         .upsert(rows, {
           onConflict: 'connection_id,external_id',
           ignoreDuplicates: true,
         })
+        .select('id')
 
       if (error) {
         console.error(`Error upserting transactions for connection ${connection.id}:`, error)
@@ -163,19 +222,27 @@ async function syncConnection(
           error: `DB error: ${error.message}`,
         }
       }
-    }
 
-    totalImported += rows.length
+      // Conta solo le righe effettivamente inserite (non i duplicati ignorati)
+      totalImported += (inserted || []).length
+    }
   }
 
-  // Aggiorna last_sync_at
-  await supabase
-    .from('bank_connections')
-    .update({
-      last_sync_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', connection.id)
+  // Aggiorna last_sync_at solo se abbiamo effettivamente importato qualcosa
+  // oppure se era già valorizzato (sync incrementale, non primo sync)
+  // Così le connessioni nuove che ricevono 0 tx continuano a richiedere
+  // la finestra completa (2 anni) finché l'EB non restituisce dati reali
+  if (totalImported > 0 || connection.last_sync_at !== null) {
+    await supabase
+      .from('bank_connections')
+      .update({
+        last_sync_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', connection.id)
+  } else {
+    console.log(`Skipping last_sync_at update for connection ${connection.id} — no transactions received on first sync, will retry with full window`)
+  }
 
   // Auto-categorizzazione a 2 fasi:
   // 1. Applica regole utente esistenti (istantaneo, gratis)
@@ -184,46 +251,44 @@ async function syncConnection(
   let aiClassified = 0
   let internalTransfers = 0
 
-  if (totalImported > 0) {
-    // Fase 1: Regole utente
-    const { data: rpcResult, error: rpcError } = await supabase
-      .rpc('apply_categorization_rules', { p_user_id: connection.user_id })
+  // Fase 1: Regole utente (sempre — anche se nessuna nuova tx, applica regole a quelle già in DB)
+  const { data: rpcResult, error: rpcError } = await supabase
+    .rpc('apply_categorization_rules', { p_user_id: connection.user_id })
 
-    if (rpcError) {
-      console.error(`Auto-categorization error for user ${connection.user_id}:`, rpcError)
-    } else {
-      autoCategorized = rpcResult || 0
-      if (autoCategorized > 0) {
-        console.log(`Rules-categorized ${autoCategorized} transactions for user ${connection.user_id}`)
-      }
+  if (rpcError) {
+    console.error(`Auto-categorization error for user ${connection.user_id}:`, rpcError)
+  } else {
+    autoCategorized = rpcResult || 0
+    if (autoCategorized > 0) {
+      console.log(`Rules-categorized ${autoCategorized} transactions for user ${connection.user_id}`)
     }
+  }
 
-    // Fase 2: AI classification + smart detection per transazioni ancora non categorizzate
-    try {
-      const classifyRes = await fetch(
-        `${Deno.env.get('SUPABASE_URL')!}/functions/v1/classify-transactions`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ user_id: connection.user_id }),
+  // Fase 2: AI classification + smart detection (sempre)
+  try {
+    const classifyRes = await fetch(
+      `${Deno.env.get('SUPABASE_URL')!}/functions/v1/classify-transactions`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!}`,
+          'Content-Type': 'application/json',
         },
-      )
+        body: JSON.stringify({ user_id: connection.user_id }),
+      },
+    )
 
-      if (classifyRes.ok) {
-        const classifyData = await classifyRes.json()
-        aiClassified = classifyData.ai_classified || 0
-        internalTransfers = classifyData.internal_transfers || 0
-        autoCategorized += classifyData.deterministic || 0
-        console.log(`AI classified: ${aiClassified}, internal transfers: ${internalTransfers}, deterministic: ${classifyData.deterministic || 0}`)
-      } else {
-        console.error(`classify-transactions error: ${classifyRes.status} ${await classifyRes.text()}`)
-      }
-    } catch (classifyErr) {
-      console.error('classify-transactions call failed:', classifyErr)
+    if (classifyRes.ok) {
+      const classifyData = await classifyRes.json()
+      aiClassified = classifyData.ai_classified || 0
+      internalTransfers = classifyData.internal_transfers || 0
+      autoCategorized += classifyData.deterministic || 0
+      console.log(`AI classified: ${aiClassified}, internal transfers: ${internalTransfers}, deterministic: ${classifyData.deterministic || 0}`)
+    } else {
+      console.error(`classify-transactions error: ${classifyRes.status} ${await classifyRes.text()}`)
     }
+  } catch (classifyErr) {
+    console.error('classify-transactions call failed:', classifyErr)
   }
 
   return {
@@ -328,7 +393,7 @@ Deno.serve(async (req) => {
               data: { type: 'bank_sync', tab: 'home' },
             })
           } catch (pushErr) {
-            console.error(`Push notification error for user ${uid}:`, pushErr)
+            console.warn(`Push notification error for user ${uid}:`, pushErr)
           }
         }
       }

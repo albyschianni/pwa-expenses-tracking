@@ -79,7 +79,11 @@ async function startAuth(userId: string, body: {
   const res = await ebFetch('/auth', {
     method: 'POST',
     body: {
-      access: { valid_until: validUntil.toISOString() },
+      access: {
+        valid_until: validUntil.toISOString(),
+        balances: true,
+        transactions: true,
+      },
       aspsp: { name: body.aspsp_name, country: body.aspsp_country },
       state,
       redirect_url: EB_REDIRECT_URL,
@@ -94,6 +98,14 @@ async function startAuth(userId: string, body: {
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
+
+  // Rimuovi eventuali righe pending rimaste da tentativi precedenti
+  await supabase
+    .from('bank_connections')
+    .delete()
+    .eq('user_id', userId)
+    .eq('institution_name', body.aspsp_name)
+    .eq('status', 'pending')
 
   await supabase.from('bank_connections').insert({
     user_id: userId,
@@ -120,9 +132,27 @@ async function completeAuth(userId: string, body: {
 
   const data = await res.json()
   // data.accounts can be UIDs (strings) or full account objects with .uid field
-  const accountUids: string[] = (data.accounts || []).map((a: any) =>
+  let accountUids: string[] = (data.accounts || []).map((a: any) =>
     typeof a === 'string' ? a : a.uid
-  )
+  ).filter(Boolean)
+
+  // Fallback: alcune banche non restituiscono gli account nel body di POST /sessions
+  // → li recuperiamo via GET /sessions/{id}
+  if (accountUids.length === 0 && data.session_id) {
+    try {
+      const sessionRes = await ebFetch(`/sessions/${data.session_id}`)
+      const sessionData = await sessionRes.json()
+      const rawAccounts = sessionData.accounts || []
+      accountUids = rawAccounts.map((a: any) =>
+        typeof a === 'string' ? a : (a.uid || a.id)
+      ).filter(Boolean)
+      if (accountUids.length > 0) {
+        console.log(`Fetched ${accountUids.length} accounts via GET /sessions/${data.session_id}`)
+      }
+    } catch (err) {
+      console.error('Failed to fetch accounts via GET /sessions:', err)
+    }
+  }
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,

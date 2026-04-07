@@ -1,17 +1,11 @@
--- Aggiunge colonna per marcare trasferimenti interni
--- I trasferimenti interni (giroconto, ricarica carta, etc.) non sono spese/entrate reali
-ALTER TABLE bank_transactions
-ADD COLUMN IF NOT EXISTS is_internal_transfer boolean DEFAULT false;
+-- Aggiunge connection_id alla view all_expenses
+-- Per le transazioni bancarie → connection_id della bank_transaction
+-- Per le transazioni manuali → NULL
 
--- Indice per query: escludi trasferimenti interni
-CREATE INDEX IF NOT EXISTS idx_bank_tx_not_internal
-ON bank_transactions(user_id)
-WHERE is_internal_transfer = false AND category_id IS NOT NULL;
-
--- Aggiorna la vista all_expenses per escludere trasferimenti interni
 DROP VIEW IF EXISTS all_expenses;
 CREATE VIEW all_expenses AS
--- Transazioni manuali
+
+-- 1. Transazioni manuali
 SELECT
   id,
   user_id,
@@ -24,12 +18,14 @@ SELECT
   created_at,
   updated_at,
   'manual'::text AS source,
-  true AS reviewed
+  NULL::uuid AS connection_id,
+  true AS reviewed,
+  false AS is_internal_transfer
 FROM expenses
 
 UNION ALL
 
--- Transazioni bancarie (solo categorizzate e NON trasferimenti interni)
+-- 2. Transazioni bancarie (solo categorizzate e NON trasferimenti interni)
 SELECT
   id,
   user_id,
@@ -45,7 +41,9 @@ SELECT
   created_at,
   created_at AS updated_at,
   'bank'::text AS source,
-  reviewed
+  connection_id,
+  reviewed,
+  is_internal_transfer
 FROM bank_transactions
 WHERE category_id IS NOT NULL
   AND is_internal_transfer = false;

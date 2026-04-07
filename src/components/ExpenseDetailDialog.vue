@@ -23,16 +23,16 @@
         <!-- Expense Details -->
         <div class="px-4 pt-2 pb-4">
           <!-- Icon and Amount -->
-          <div class="flex items-center gap-4 mb-6">
+          <div class="flex items-center gap-4 mb-5">
             <div
-              class="w-14 h-14 rounded-full flex items-center justify-center text-2xl shrink-0"
+              class="w-12 h-12 rounded-full flex items-center justify-center text-xl shrink-0"
               :style="{ backgroundColor: expense.color }"
             >
               {{ expense.icon }}
             </div>
             <div class="flex-1">
               <p
-                class="text-3xl font-bold"
+                class="text-2xl font-bold"
                 :class="isIncome ? 'text-emerald-400' : 'text-red-400'"
               >
                 {{ isIncome ? '+' : '-' }}{{ formatAmount(expense.amount) }}
@@ -50,25 +50,34 @@
           </div>
 
           <!-- Details -->
-          <div class="space-y-4 mb-6">
-            <div class="flex justify-between items-center py-3 border-b border-gray-700">
-              <span class="text-gray-400">Descrizione</span>
-              <span class="text-white font-medium">{{ expense.description }}</span>
+          <div class="space-y-0 mb-5">
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-700">
+              <span class="text-gray-400 text-sm">Descrizione</span>
+              <span class="text-white font-medium text-sm text-right max-w-[60%] truncate">{{ expense.description || 'Pagamento prepagata' }}</span>
             </div>
-            <div class="flex justify-between items-center py-3 border-b border-gray-700">
-              <span class="text-gray-400">Data</span>
-              <span class="text-white font-medium">{{ formattedDate }}</span>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-700">
+              <span class="text-gray-400 text-sm">Data</span>
+              <span class="text-white font-medium text-sm">{{ formattedDate }}</span>
             </div>
-            <div class="flex justify-between items-center py-3 border-b border-gray-700">
-              <span class="text-gray-400">Categoria</span>
-              <span class="text-white font-medium flex items-center gap-2">
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-700">
+              <span class="text-gray-400 text-sm">Categoria</span>
+              <span class="text-white font-medium text-sm flex items-center gap-1.5">
                 <span>{{ expense.icon }}</span>
                 {{ categoryLabel }}
               </span>
             </div>
-            <div v-if="expense.userDisplayName || expense.userEmail" class="flex justify-between items-center py-3 border-b border-gray-700">
-              <span class="text-gray-400">Aggiunta da</span>
-              <span class="text-white font-medium">{{ expense.userDisplayName || expense.userEmail }}</span>
+            <div v-if="bankConnectionName" class="flex justify-between items-center py-2.5 border-b border-gray-700">
+              <span class="text-gray-400 text-sm">Conto</span>
+              <span class="text-white font-medium text-sm flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-teal-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+                {{ bankConnectionName }}
+              </span>
+            </div>
+            <div v-if="expense.userDisplayName || expense.userEmail" class="flex justify-between items-center py-2.5 border-b border-gray-700">
+              <span class="text-gray-400 text-sm">Aggiunta da</span>
+              <span class="text-white font-medium text-sm">{{ expense.userDisplayName || expense.userEmail }}</span>
             </div>
           </div>
 
@@ -80,23 +89,26 @@
             <span class="text-teal-400 text-xs font-medium">Importata dalla banca</span>
           </div>
 
-          <!-- Actions (only for manual expenses) -->
-          <div v-if="!isBankSource" class="space-y-2">
+          <!-- Actions -->
+          <div :class="isBankSource ? 'flex gap-2' : 'space-y-2'">
             <button
               @click="handleEdit"
-              class="w-full flex items-center justify-center gap-3 p-4 rounded-xl font-semibold active:opacity-80 transition-colors"
-              :class="isIncome ? 'bg-emerald-400 text-gray-900' : 'bg-teal-400 text-gray-900'"
+              class="flex items-center justify-center rounded-xl active:opacity-80 transition-colors"
+              :class="isBankSource
+                ? 'flex-1 gap-2 p-3 text-sm font-medium bg-gray-700 text-gray-200'
+                : `w-full gap-3 p-4 font-semibold ${isIncome ? 'bg-emerald-400 text-gray-900' : 'bg-teal-400 text-gray-900'}`"
             >
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <svg :class="isBankSource ? 'w-4 h-4' : 'w-5 h-5'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               Modifica
             </button>
             <button
               @click="confirmDelete"
-              class="w-full flex items-center justify-center gap-3 p-4 rounded-xl bg-gray-700 text-red-400 font-semibold active:bg-gray-600 transition-colors"
+              class="flex items-center justify-center rounded-xl active:bg-gray-600 transition-colors bg-gray-700 text-red-400"
+              :class="isBankSource ? 'flex-1 gap-2 p-3 text-sm font-medium' : 'w-full gap-3 p-4 font-semibold'"
             >
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <svg :class="isBankSource ? 'w-4 h-4' : 'w-5 h-5'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
               Elimina
@@ -144,6 +156,7 @@
 import { ref, computed, watch } from 'vue'
 import { getCategoryConfig } from '../composables/useExpenses'
 import { useCurrency } from '../composables/useCurrency'
+import { useBanking } from '../composables/useBanking'
 
 const props = defineProps({
   open: Boolean,
@@ -156,6 +169,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'edit', 'delete'])
 
 const { formatAmount } = useCurrency()
+const { connections } = useBanking()
 
 const showDeleteConfirm = ref(false)
 
@@ -167,6 +181,11 @@ watch(() => props.open, (isOpen) => {
 
 const isIncome = computed(() => props.expense?.type === 'income')
 const isBankSource = computed(() => props.expense?.source === 'bank')
+
+const bankConnectionName = computed(() => {
+  if (!props.expense?.connectionId) return null
+  return connections.value.find(c => c.id === props.expense.connectionId)?.institutionName ?? null
+})
 
 const categoryLabel = computed(() => {
   if (!props.expense) return ''

@@ -1,5 +1,32 @@
 [
   {
+    "version": "2.2.0",
+    "date": "2026-04-06",
+    "title": "Transazioni Bancarie: UX & Filtri Avanzati",
+    "requiredFlag": "banking",
+    "highlights": [
+      { "icon": "📅", "text": "Filtro per data nelle transazioni bancarie: scegli qualsiasi intervallo dell'anno" },
+      { "icon": "🏦", "text": "Dettaglio per singolo conto: accedi alle transazioni di una banca dalla sua card" },
+      { "icon": "💳", "text": "Il nome del conto bancario appare nel dettaglio di ogni transazione importata" },
+      { "icon": "❓", "text": "Pagamenti prepagata senza dati separati e non conteggiati come 'da categorizzare'" },
+      { "icon": "🤖", "text": "Auto-categorizzazione migliorata: ora funziona correttamente con Revolut e HYPE" },
+      { "icon": "⏱️", "text": "Sync automatico ogni 15 minuti: le nuove transazioni arrivano senza aprire l'app" }
+    ]
+  },
+  {
+    "version": "2.1.0",
+    "date": "2026-04-04",
+    "title": "Connessione Multi-Banca & Auto-Categorizzazione",
+    "requiredFlag": "banking",
+    "highlights": [
+      { "icon": "🏦", "text": "Connetti più banche: Fineco, Revolut, HYPE e altre" },
+      { "icon": "🤖", "text": "Categorizzazione automatica con AI e regole intelligenti" },
+      { "icon": "↔️", "text": "Rilevamento automatico dei trasferimenti interni tra conti" },
+      { "icon": "❓", "text": "Pagamenti con carta prepagata ora riconosciuti e separati" },
+      { "icon": "📋", "text": "Regole personalizzate: impara dai tuoi interventi manuali" }
+    ]
+  },
+  {
     "version": "2.0.3",
     "date": "2026-03-22",
     "title": "Portafogli Condivisi & Notifiche Push",
