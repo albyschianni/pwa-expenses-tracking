@@ -171,6 +171,22 @@
         </svg>
       </button>
 
+      <!-- Budget mensile -->
+      <button @click="budgetSheetOpen = true" class="w-full flex items-center gap-4 p-4 text-left border-b border-gray-700 active:bg-gray-700 transition-colors">
+        <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+          <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        </div>
+        <div class="flex-1">
+          <p class="text-white font-medium">Budget mensile</p>
+          <p class="text-gray-400 text-sm">{{ templates.length > 0 ? `${templates.length} categorie configurate` : 'Imposta obiettivi di spesa' }}</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
       <!-- Currency -->
       <button
         @click="currencyPickerOpen = true"
@@ -202,6 +218,63 @@
       </svg>
       {{ loading ? 'Uscita...' : 'Esci' }}
     </button>
+
+    <!-- Budget Sheet -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="budgetSheetOpen" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" @click="budgetSheetOpen = false" />
+      </Transition>
+      <Transition name="slide-up">
+        <div v-if="budgetSheetOpen" class="fixed inset-x-0 bottom-0 z-50 bg-gray-800 rounded-t-3xl max-h-[85vh] flex flex-col">
+          <div class="p-6 pb-0">
+            <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
+            <h3 class="text-white text-lg font-semibold mb-1">Budget mensile</h3>
+            <p class="text-gray-400 text-sm mb-4">Imposta un limite di spesa mensile per categoria. Si applica automaticamente ogni mese.</p>
+          </div>
+
+          <div class="flex-1 overflow-y-auto px-6 pb-8">
+            <!-- Lista categorie spesa -->
+            <div class="space-y-3">
+              <div
+                v-for="cat in expenseCategories"
+                :key="cat.id"
+                class="bg-gray-700 rounded-xl p-3 flex items-center gap-3"
+              >
+                <div
+                  class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-base"
+                  :style="{ backgroundColor: cat.color }"
+                >{{ cat.icon }}</div>
+                <span class="text-white text-sm flex-1">{{ cat.label }}</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-gray-400 text-sm">€</span>
+                  <input
+                    type="number"
+                    inputmode="decimal"
+                    min="0"
+                    step="10"
+                    placeholder="—"
+                    :value="getBudgetAmount(cat.id)"
+                    @change="onBudgetChange(cat.id, ($event.target as HTMLInputElement).value)"
+                    class="w-20 bg-gray-600 text-white text-sm rounded-lg px-2 py-1.5 text-right focus:outline-none focus:ring-1 focus:ring-teal-400 placeholder-gray-500"
+                  />
+                </div>
+                <button
+                  v-if="getBudgetAmount(cat.id)"
+                  @click="deleteTemplate(cat.id)"
+                  class="text-gray-500 active:text-red-400 transition-colors shrink-0"
+                >
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <p class="text-gray-500 text-xs text-center mt-4">Le modifiche si salvano automaticamente</p>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- App Version -->
     <p class="text-center text-gray-600 text-sm mt-6">Expense Tracker v{{ appVersion }}</p>
@@ -1069,6 +1142,7 @@ import { useBanking } from '../composables/useBanking'
 import { useSelectedMonth } from '../composables/useSelectedMonth'
 import { APP_VERSION } from '../constants/version'
 import BankConnectionsManager from '../components/BankConnectionsManager.vue'
+import { useBudgets } from '../composables/useBudgets'
 
 const props = defineProps<{
   bankingEnabled: boolean
@@ -1103,6 +1177,25 @@ const categoriesSheetOpen = ref(false)
 const privacySheetOpen = ref(false)
 const rulesSheetOpen = ref(false)
 const aiStatsSheetOpen = ref(false)
+const budgetSheetOpen = ref(false)
+
+// ── Budget mensile ────────────────────────────────────────────
+const { templates, setTemplate, deleteTemplate } = useBudgets()
+
+const expenseCategories = computed(() => managedExpenseCategories.value)
+
+function getBudgetAmount(categoryId: string): number | undefined {
+  return templates.value.find(t => t.categoryId === categoryId)?.amount
+}
+
+async function onBudgetChange(categoryId: string, value: string) {
+  const amount = parseFloat(value)
+  if (!isNaN(amount) && amount > 0) {
+    await setTemplate(categoryId, amount)
+  } else if (!value || value === '0') {
+    await deleteTemplate(categoryId)
+  }
+}
 
 // ── Regole AI ────────────────────────────────────────────────
 const categorizationRules = ref<{ id: string; match_value: string; category_id: string; usage_count: number }[]>([])

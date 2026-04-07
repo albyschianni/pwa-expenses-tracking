@@ -151,7 +151,7 @@
                 </div>
               </button>
 
-              <!-- Progress Bar -->
+              <!-- Progress Bar % sul totale -->
               <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
                   class="h-full rounded-full transition-all duration-300"
@@ -161,6 +161,26 @@
                   }"
                 />
               </div>
+
+              <!-- Budget indicator (solo se configurato e solo per spese) -->
+              <template v-if="chartType === 'expense' && getBudgetStatus(cat.categoryId)">
+                <div class="flex items-center justify-between mt-1">
+                  <span class="text-gray-500 text-[11px]">Obiettivo mensile</span>
+                  <span class="text-[11px]" :class="budgetColorClass(getBudgetStatus(cat.categoryId)!.percentage)">
+                    {{ formatCurrency(cat.amount) }} / {{ formatCurrency(getBudgetStatus(cat.categoryId)!.budgeted) }}
+                    · {{ getBudgetStatus(cat.categoryId)!.percentage }}%
+                  </span>
+                </div>
+                <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    class="h-full rounded-full transition-all duration-300"
+                    :style="{
+                      width: Math.min(getBudgetStatus(cat.categoryId)!.percentage, 100) + '%',
+                      backgroundColor: budgetColor(getBudgetStatus(cat.categoryId)!.percentage)
+                    }"
+                  />
+                </div>
+              </template>
 
               <!-- Expanded: lista transazioni -->
               <Transition name="expand">
@@ -205,6 +225,7 @@ import {
 import { useExpenses } from '../composables/useExpenses'
 import { useCurrency } from '../composables/useCurrency'
 import { useSharedWallets } from '../composables/useSharedWallets'
+import { useBudgets } from '../composables/useBudgets'
 
 ChartJS.register(ArcElement, Tooltip)
 
@@ -278,6 +299,8 @@ function getPercentage(amount: number): number {
 
 const formatCurrency = (amount: number) => formatAmount(amount)
 
+const { getBudgetStatus } = useBudgets()
+
 const expandedCategory = ref<string | null>(null)
 
 function toggleCategory(categoryId: string) {
@@ -290,6 +313,18 @@ function getExpensesForCategory(categoryId: string) {
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+}
+
+function budgetColor(percentage: number): string {
+  if (percentage >= 100) return '#f87171'  // red-400
+  if (percentage >= 80)  return '#fbbf24'  // amber-400
+  return '#34d399'                          // emerald-400
+}
+
+function budgetColorClass(percentage: number): string {
+  if (percentage >= 100) return 'text-red-400 font-semibold'
+  if (percentage >= 80)  return 'text-amber-400'
+  return 'text-emerald-400'
 }
 
 const doughnutData = computed(() => ({

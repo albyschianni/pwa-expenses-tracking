@@ -204,6 +204,7 @@ import { usePushNotifications } from "./composables/usePushNotifications"
 import { useCategories } from "./composables/useCategories"
 import { useBanking } from "./composables/useBanking"
 import { useFeatureFlags } from "./composables/useFeatureFlags"
+import { useBudgets } from "./composables/useBudgets"
 import WhatsNewModal from "./components/WhatsNewModal.vue"
 import NotificationPermissionDialog from "./components/NotificationPermissionDialog.vue"
 import { useWhatsNew } from "./composables/useWhatsNew"
@@ -224,6 +225,7 @@ const { fetchCategories } = useCategories()
 const { fetchConnections, fetchBankTransactions } = useBanking()
 const { loadFlags, isEnabled } = useFeatureFlags()
 const { checkForUpdates } = useWhatsNew()
+const { init: initBudgets } = useBudgets()
 const {
   addRecurringExpense,
   updateRecurringExpense,
@@ -351,7 +353,7 @@ watch(isAuthenticated, async (authenticated) => {
     
     // If in maintenance mode, skip the rest of initialization
     if (!maintenanceMode.value) {
-      await Promise.all([fetchExpenses(), fetchRecurringExpenses()])
+      await Promise.all([fetchExpenses(), fetchRecurringExpenses(), initBudgets()])
       scheduleMarkAllReviewed()
       await processAutoGeneration()
       // Banking: only fetch if feature is enabled for this user
