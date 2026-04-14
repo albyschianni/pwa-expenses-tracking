@@ -1,7 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://nbxxjddsypresmywigbz.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ieHhqZGRzeXByZXNteXdpZ2J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NzIwNzIsImV4cCI6MjA4NjA0ODA3Mn0.AnCgmljdebRqPZhZfOQ-NSs4Gav-19LJIFcVbKYHncU'
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variables')
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
@@ -69,6 +73,41 @@ export interface DbWalletInvitation {
   status: 'pending' | 'accepted' | 'rejected'
   created_at: string
   updated_at: string
+}
+
+export interface DbBankConnection {
+  id: string
+  user_id: string
+  institution_name: string
+  institution_country: string
+  session_id: string | null
+  account_ids: string[] | null
+  status: 'pending' | 'active' | 'expired' | 'error'
+  consent_expires_at: string | null
+  last_sync_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DbBankTransaction {
+  id: string
+  connection_id: string
+  external_id: string | null
+  booking_date: string | null
+  value_date: string | null
+  amount: number
+  currency: string
+  description: string | null
+  counterpart_name: string | null
+  counterpart_iban: string | null
+  merchant_category_code: string | null
+  credit_debit_indicator: 'CRDT' | 'DBIT' | null
+  status: string
+  category_id: string | null
+  categorization_source: string | null
+  reviewed: boolean
+  is_internal_transfer: boolean
+  created_at: string
 }
 
 export interface DbRecurringExpense {

@@ -65,6 +65,11 @@ export function useCategories() {
     [...categories.value].sort((a, b) => a.sortOrder - b.sortOrder)
   )
 
+  // Map per lookup O(1) — usato da getCategoryById e getCategoryConfig
+  const categoryMap = computed(() =>
+    new Map(categories.value.map(c => [c.id, c]))
+  )
+
   // Active expense categories for forms
   const expenseCategories = computed(() =>
     allCategories.value.filter(c => c.type === 'expense' && c.isActive)
@@ -236,9 +241,9 @@ export function useCategories() {
     ])
   }
 
-  // O(1) lookup
+  // O(1) lookup via Map
   function getCategoryById(id: string): CategoryItem | undefined {
-    return categories.value.find(c => c.id === id)
+    return categoryMap.value.get(id)
   }
 
   // Initialize watchers once

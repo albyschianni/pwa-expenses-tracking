@@ -323,13 +323,30 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    // Determina se è un sync globale (pg_cron) o per singolo utente
+    // Determina se è un sync globale (pg_cron) o per singolo utente.
+    // Se il client invia user_id nel body, verifica che corrisponda al JWT.
     let userId: string | null = null
     try {
       const body = await req.json()
-      userId = body.user_id || null
+      const bodyUserId = body.user_id || null
+
+      if (bodyUserId) {
+        // Valida: il user_id del body deve corrispondere al JWT dell'utente autenticato
+        const userClient = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_ANON_KEY')!,
+          { global: { headers: { Authorization: authHeader } } },
+        )
+        const { data: { user: authUser } } = await userClient.auth.getUser()
+        if (authUser && authUser.id === bodyUserId) {
+          userId = bodyUserId
+        } else {
+          // Se non corrisponde, usa l'id dal JWT (più sicuro)
+          userId = authUser?.id ?? null
+        }
+      }
     } catch {
-      // No body = sync globale (tutte le connessioni attive)
+      // No body = sync globale (tutte le connessioni attive, es. pg_cron)
     }
 
     // Query connessioni attive

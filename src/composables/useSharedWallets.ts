@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
-import { supabase, type DbSharedWallet, type DbSharedWalletMember, type DbExpense } from '../lib/supabase'
+import { supabase, type DbSharedWalletMember, type DbExpense } from '../lib/supabase'
 import { useAuth } from './useAuth'
+import { useSelectedMonth } from './useSelectedMonth'
 import { getCategoryConfig, type TransactionType } from './useExpenses'
 
 export interface SharedWallet {
@@ -54,6 +55,7 @@ let initialized = false
 
 export function useSharedWallets() {
   const { user, isAuthenticated } = useAuth()
+  const { monthKey } = useSelectedMonth()
 
   async function fetchWallets() {
     if (!user.value) return
@@ -61,39 +63,31 @@ export function useSharedWallets() {
     error.value = null
 
     try {
-      // Fetch wallets where user is an active member
-      const { data: memberRows, error: memberErr } = await supabase
+      // Singola query con JOIN: elimina il roundtrip N+1
+      const { data: rows, error: queryErr } = await supabase
         .from('shared_wallet_members')
-        .select('wallet_id, role')
+        .select('role, shared_wallets!inner(id, name, created_by, currency, created_at, is_deleted)')
         .eq('user_id', user.value.id)
         .eq('is_active', true)
+        .eq('shared_wallets.is_deleted', false)
 
-      if (memberErr) throw memberErr
-      if (!memberRows || memberRows.length === 0) {
+      if (queryErr) throw queryErr
+      if (!rows || rows.length === 0) {
         wallets.value = []
         return
       }
 
-      const walletIds = memberRows.map(m => m.wallet_id)
-      const roleMap = new Map(memberRows.map(m => [m.wallet_id, m.role]))
-
-      const { data: walletRows, error: walletErr } = await supabase
-        .from('shared_wallets')
-        .select('*')
-        .in('id', walletIds)
-        .eq('is_deleted', false)
-        .order('created_at', { ascending: false })
-
-      if (walletErr) throw walletErr
-
-      wallets.value = (walletRows || []).map((w: DbSharedWallet) => ({
-        id: w.id,
-        name: w.name,
-        createdBy: w.created_by,
-        currency: w.currency,
-        createdAt: w.created_at,
-        role: (roleMap.get(w.id) || 'member') as 'owner' | 'member',
-      }))
+      wallets.value = rows.map((row: any) => {
+        const w = row.shared_wallets
+        return {
+          id: w.id,
+          name: w.name,
+          createdBy: w.created_by,
+          currency: w.currency,
+          createdAt: w.created_at,
+          role: (row.role || 'member') as 'owner' | 'member',
+        }
+      }).sort((a: SharedWallet, b: SharedWallet) => b.createdAt.localeCompare(a.createdAt))
     } catch (e: any) {
       error.value = e.message
       console.error('Failed to fetch wallets:', e)
@@ -258,10 +252,21 @@ export function useSharedWallets() {
   async function fetchWalletTransactions(walletId: string) {
     loading.value = true
     try {
+      // Filtra per mese selezionato (come useExpenses per coerenza)
+      const mk = monthKey.value
+      const parts = mk.split('-').map(Number)
+      const year = parts[0] ?? new Date().getFullYear()
+      const month = parts[1] ?? (new Date().getMonth() + 1)
+      const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+      const lastDay = new Date(year, month, 0).getDate()
+      const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
       const { data, error: fetchErr } = await supabase
         .from('expenses')
         .select('*')
         .eq('shared_wallet_id', walletId)
+        .gte('date', startDate)
+        .lte('date', endDate)
         .order('date', { ascending: false })
 
       if (fetchErr) throw fetchErr
@@ -390,6 +395,13 @@ export function useSharedWallets() {
         walletTransactions.value = []
       }
     }, { immediate: true })
+
+    // Ri-fetcha transazioni wallet quando cambia mese
+    watch(monthKey, () => {
+      if (activeWallet.value) {
+        fetchWalletTransactions(activeWallet.value.id)
+      }
+    })
   }
 
   return {

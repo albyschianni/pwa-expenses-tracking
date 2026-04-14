@@ -17,7 +17,7 @@
 
 ## Issues critici
 
-### [ ] CRIT-1: Anon key Supabase hardcodata nel sorgente
+### [x] CRIT-1: Anon key Supabase hardcodata nel sorgente
 **File:** `src/lib/supabase.ts:4`  
 **Problema:** La JWT anon key è hardcodata come fallback string. Finisce nel bundle produzione, non può essere ruotata senza deploy, viola il principio "no secrets in code".  
 **Fix:**
@@ -30,14 +30,14 @@ if (!supabaseUrl || !supabaseAnonKey) throw new Error('Missing Supabase env vars
 
 ---
 
-### [ ] CRIT-2: `user_id` passato dal client al server in banking sync
+### [x] CRIT-2: `user_id` passato dal client al server in banking sync
 **File:** `src/composables/useBanking.ts:311`  
 **Problema:** `syncManual()` invia `user_id` nel request body. L'Edge Function dovrebbe derivarlo dal JWT in Authorization header, non fidarsi del body del client. Potenziale privilege escalation se la funzione non valida.  
 **Fix:** Nell'Edge Function `banking-sync`, leggere `user_id` via `supabaseClient.auth.getUser()`, ignorare il valore nel body.
 
 ---
 
-### [ ] CRIT-3: Race condition in `deleteConnection` — primo delete senza error check
+### [x] CRIT-3: Race condition in `deleteConnection` — primo delete senza error check
 **File:** `src/composables/useBanking.ts:348-365`  
 **Problema:** Se il delete su `bank_transactions` fallisce silenziosamente (nessun `if (err) throw`), si procede a cancellare `bank_connections` lasciando transazioni orfane nel DB.  
 **Fix:**
@@ -48,14 +48,14 @@ if (txErr) throw txErr  // aggiungere questa riga
 
 ---
 
-### [ ] CRIT-4: Singleton state `useBudgets` non si resetta al logout
+### [x] CRIT-4: Singleton state `useBudgets` non si resetta al logout
 **File:** `src/composables/useBudgets.ts`  
 **Problema:** `loadedMonth` e `watcherInitialized` non vengono resettati al logout. Se due utenti diversi usano l'app nella stessa sessione browser (logout + login), `loadedMonth` rimane stale e i budget del nuovo utente non si caricano se è lo stesso mese.  
 **Fix:** Aggiungere watcher su `isAuthenticated` che resetta `loadedMonth = null`.
 
 ---
 
-### [ ] CRIT-5: `deleteExpense` non gestisce bank transactions
+### [x] CRIT-5: `deleteExpense` non gestisce bank transactions
 **File:** `src/composables/useExpenses.ts:368-390`  
 **Problema:** La funzione esegue sempre DELETE su `expenses`, mai su `bank_transactions`. Se si elimina una transazione bancaria, la query non trova righe (nessun errore), ma la transazione riappare al prossimo fetch.  
 **Fix:**
@@ -72,14 +72,14 @@ async function deleteExpense(id: string) {
 
 ## Issues seri
 
-### [ ] SERIOUS-1: `scheduleMarkAllReviewed` è inaffidabile
+### [x] SERIOUS-1: `scheduleMarkAllReviewed` è inaffidabile
 **File:** `src/composables/useExpenses.ts:353-366`  
 **Problema:** Usa `setTimeout` con 5 secondi. Se l'utente chiude l'app prima, la query non parte. I badge "NEW" riappaiono al refresh successivo.  
 **Fix:** Usare `Page Visibility API` (`visibilitychange`) o `navigator.sendBeacon` per garantire l'invio prima che la pagina venga scaricata.
 
 ---
 
-### [ ] SERIOUS-2: Race condition nel `loading` globale condiviso
+### [x] SERIOUS-2: Race condition nel `loading` globale condiviso
 **File:** `src/composables/useExpenses.ts:44-46`, `src/composables/useBanking.ts:65`  
 **Problema:** Ogni composable ha un singolo `loading = ref(false)` condiviso tra tutte le operazioni. Se `addExpense` e `updateExpense` partono quasi in contemporanea, il secondo `loading = false` resetta lo spinner prima che la prima operazione finisca.  
 **Fix:** Usare un contatore invece di un boolean, o un `Set` di operazioni in corso:
@@ -108,7 +108,7 @@ const loading = computed(() => pendingOps.value > 0)
 
 ---
 
-### [ ] PERF-2: `getCategoryConfig` istanzia composable + O(n) lookup per ogni riga
+### [x] PERF-2: `getCategoryConfig` istanzia composable + O(n) lookup per ogni riga
 **File:** `src/composables/useExpenses.ts:36-41`, `src/composables/useCategories.ts:239-241`  
 **Problema:** `getCategoryConfig` chiama `useCategories()` (overhead di closure) e poi `.find()` O(n) per ogni transazione trasformata. Con 200 transazioni e 16 categorie = 200 scansioni lineari.  
 **Nota:** Il commento dice `// O(1) lookup` ma `.find()` è O(n).  
@@ -120,7 +120,7 @@ function getCategoryById(id: string) { return categoryMap.value.get(id) }
 
 ---
 
-### [ ] PERF-3: `allBudgetStatuses` è O(n × m)
+### [x] PERF-3: `allBudgetStatuses` è O(n × m)
 **File:** `src/composables/useBudgets.ts:202-204`  
 **Problema:** Per ogni categoria budgettata, `getBudgetStatus` fa un `.filter() + .reduce()` su tutto `expenses.value`. Con 10 budget e 200 spese = 2000 operazioni ad ogni cambio delle spese.  
 **Fix:** Pre-aggregare le spese in un Map in un singolo pass O(n):
@@ -141,14 +141,14 @@ const allBudgetStatuses = computed(() => {
 
 ---
 
-### [ ] PERF-4: `fetchWalletTransactions` senza filtro mese né limite
+### [x] PERF-4: `fetchWalletTransactions` senza filtro mese né limite
 **File:** `src/composables/useSharedWallets.ts:258-265`  
 **Problema:** Carica TUTTE le transazioni storiche di un wallet (nessun `.gte/.lte`, nessun `.limit()`). Un wallet usato per 1 anno porta centinaia di righe in memoria.  
 **Fix:** Aggiungere filtro per mese selezionato (come `useExpenses`) o almeno `.limit(200)` come guard.
 
 ---
 
-### [ ] PERF-5: `syncTransactions` è sequenziale per account
+### [x] PERF-5: `syncTransactions` è sequenziale per account
 **File:** `src/composables/useBanking.ts:276-285`  
 **Problema:** Loop `for...await` synca i conti uno alla volta. Con 3 conti e 500ms per Edge Function = 1.5s bloccati.  
 **Fix:**
@@ -160,7 +160,7 @@ const results = await Promise.all(accounts.map(accountId =>
 
 ---
 
-### [ ] PERF-6: `fetchWallets` fa 2 query sequenziali (N+1 pattern)
+### [x] PERF-6: `fetchWallets` fa 2 query sequenziali (N+1 pattern)
 **File:** `src/composables/useSharedWallets.ts:63-86`  
 **Problema:** Prima query su `shared_wallet_members`, poi seconda su `shared_wallets` con gli IDs trovati.  
 **Fix (Supabase foreign key join):**
@@ -174,7 +174,7 @@ const { data } = await supabase
 
 ---
 
-### [ ] PERF-7: `useBudgets.init()` fa 2 query sequenziali invece di parallele
+### [x] PERF-7: `useBudgets.init()` fa 2 query sequenziali invece di parallele
 **File:** `src/composables/useBudgets.ts:106-113`  
 **Problema:** `fetchTemplates()` e `fetchMonthlyBudgets()` sono indipendenti ma eseguite in serie.  
 **Fix:**
@@ -199,7 +199,7 @@ Quasi ogni query usa `select('*')`. Esempio: `fetchBankTransactions` porta `coun
 
 ---
 
-### [ ] ARCH-2: Logica merchant duplicata in 2 composables
+### [x] ARCH-2: Logica merchant duplicata in 2 composables
 **File:** `src/composables/useExpenses.ts:249-254` e `src/composables/useBanking.ts:8-18`  
 **Problema:** Stessa regex di pulizia descrizione Fineco in due posti con implementazioni leggermente diverse (useBanking aggiunge `.toUpperCase()`, useExpenses no) → match inconsistenti sulle regole.  
 **Fix:** Creare `src/lib/banking-utils.ts` con `extractMerchantFromDescription()` esportata.
@@ -251,7 +251,7 @@ setTimeout(() => { showPushPrompt.value = true }, 2500)
 
 ## Code Quality
 
-### [ ] CQ-1: Commento fuorviante in `getCategoryById`
+### [x] CQ-1: Commento fuorviante in `getCategoryById`
 **File:** `src/composables/useCategories.ts:239`  
 ```typescript
 // O(1) lookup  ← SBAGLIATO: .find() è O(n)
@@ -260,7 +260,7 @@ function getCategoryById(id: string) { return categories.value.find(c => c.id ==
 
 ---
 
-### [ ] CQ-2: `any` types in `transformConnection` e `transformTransaction`
+### [x] CQ-2: `any` types in `transformConnection` e `transformTransaction`
 **File:** `src/composables/useBanking.ts:71-106`  
 **Fix:** Aggiungere `DbBankConnection` e `DbBankTransaction` interfaces in `src/lib/supabase.ts` (come già fatto per `DbExpense`).
 
@@ -275,12 +275,12 @@ const updateData: any = {}  // ← perdita type safety
 
 ---
 
-### [ ] CQ-4: `deleteConnection` non aspetta bank_transactions prima di continuare
+### [x] CQ-4: `deleteConnection` non aspetta bank_transactions prima di continuare
 Vedi CRIT-3.
 
 ---
 
-### [ ] CQ-5: Error handling inconsistente tra write e read operations
+### [x] CQ-5: Error handling inconsistente tra write e read operations
 - Metodi write (`addExpense`, `updateExpense`, etc.): lanciano, il chiamante fa try/catch
 - Metodi read (`fetchConnections`, `fetchBankTransactions`): swallano con `console.error`, nessun errore visibile al chiamante
 
@@ -292,16 +292,16 @@ Standardizzare: **write = throw, read = aggiorna `error.value`**.
 
 | # | Issue | File | Impatto |
 |---|-------|------|---------|
-| [ ] QW-1 | Rimuovere anon key hardcodata | `src/lib/supabase.ts:4` | Security |
-| [ ] QW-2 | Parallelizzare `fetchTemplates + fetchMonthlyBudgets` | `src/composables/useBudgets.ts:106` | -30% tempo init |
-| [ ] QW-3 | Parallelizzare `syncTransactions` con Promise.all | `src/composables/useBanking.ts:276` | -60% tempo sync |
-| [ ] QW-4 | Map per `getCategoryById` (O(1) reale) | `src/composables/useCategories.ts:240` | Risolve PERF-2 + CQ-1 |
-| [ ] QW-5 | Error check nel primo delete di `deleteConnection` | `src/composables/useBanking.ts:349` | Risolve CRIT-3 |
-| [ ] QW-6 | Estrarre `extractMerchantFromDescription` | `src/lib/banking-utils.ts` (nuovo) | Risolve ARCH-2 |
-| [ ] QW-7 | JOIN per `fetchWallets` | `src/composables/useSharedWallets.ts:63` | -1 DB roundtrip |
-| [ ] QW-8 | `.limit()` su `fetchWalletTransactions` | `src/composables/useSharedWallets.ts:258` | Risolve PERF-4 |
-| [ ] QW-9 | Pre-aggregazione O(n) per `allBudgetStatuses` | `src/composables/useBudgets.ts:202` | Risolve PERF-3 |
-| [ ] QW-10 | Watcher logout in `useBudgets` | `src/composables/useBudgets.ts` | Risolve CRIT-4 |
+| [x] QW-1 | Rimuovere anon key hardcodata | `src/lib/supabase.ts:4` | Security |
+| [x] QW-2 | Parallelizzare `fetchTemplates + fetchMonthlyBudgets` | `src/composables/useBudgets.ts:106` | -30% tempo init |
+| [x] QW-3 | Parallelizzare `syncTransactions` con Promise.all | `src/composables/useBanking.ts:276` | -60% tempo sync |
+| [x] QW-4 | Map per `getCategoryById` (O(1) reale) | `src/composables/useCategories.ts:240` | Risolve PERF-2 + CQ-1 |
+| [x] QW-5 | Error check nel primo delete di `deleteConnection` | `src/composables/useBanking.ts:349` | Risolve CRIT-3 |
+| [x] QW-6 | Estrarre `extractMerchantFromDescription` | `src/lib/banking-utils.ts` (nuovo) | Risolve ARCH-2 |
+| [x] QW-7 | JOIN per `fetchWallets` | `src/composables/useSharedWallets.ts:63` | -1 DB roundtrip |
+| [x] QW-8 | Filtro mese su `fetchWalletTransactions` | `src/composables/useSharedWallets.ts:258` | Risolve PERF-4 |
+| [x] QW-9 | Pre-aggregazione O(n) per `allBudgetStatuses` | `src/composables/useBudgets.ts:202` | Risolve PERF-3 |
+| [x] QW-10 | Watcher logout in `useBudgets` | `src/composables/useBudgets.ts` | Risolve CRIT-4 |
 
 ---
 
@@ -354,11 +354,31 @@ Il banking OAuth su mobile non può usare `window.location` per il callback. Va 
 
 ## Progressi
 
-### Risolti
-_Nessuno ancora_
+### Risolti (2026-04-15)
+- [x] CRIT-1 — Rimossa anon key hardcodata, ora throw se manca env var
+- [x] CRIT-2 — Edge Function banking-sync ora valida user_id dal JWT
+- [x] CRIT-3 — Aggiunto error check al delete bank_transactions in deleteConnection
+- [x] CRIT-4 — Aggiunto watcher logout in useBudgets (resetta loadedMonth + state)
+- [x] CRIT-5 — deleteExpense ora usa la tabella corretta (expenses vs bank_transactions)
+- [x] SERIOUS-1 — scheduleMarkAllReviewed usa visibilitychange + setTimeout fallback
+- [x] SERIOUS-2 — loading in useExpenses/useBanking ora usa contatore _pendingOps
+- [x] PERF-2/CQ-1 — getCategoryById ora O(1) via Map (commento corretto)
+- [x] PERF-3 — allBudgetStatuses pre-aggrega spese in singolo pass O(n)
+- [x] PERF-4 — fetchWalletTransactions filtra per mese + watcher monthKey
+- [x] PERF-5 — syncTransactions parallelizzato con Promise.allSettled
+- [x] PERF-6 — fetchWallets usa JOIN Supabase (1 query invece di 2)
+- [x] PERF-7 — useBudgets.init() parallelizza fetchTemplates + fetchMonthlyBudgets
+- [x] ARCH-2 — extractMerchantFromDescription estratta in src/lib/banking-utils.ts
+- [x] CQ-2 — Aggiunti DbBankConnection e DbBankTransaction in supabase.ts
+- [x] CQ-5 — fetchConnections e fetchBankTransactions ora aggiornano error.value
 
-### Da prioritizzare
-1. CRIT-1, CRIT-2, CRIT-3 (sicurezza + bug in prod)
-2. QW-4 (Map categoryById — prerequisito per PERF-2)
-3. QW-9 (budgets aggregation — visibile in Settings)
-4. ARCH-2 (estrazione merchant — prerequisito per Flutter)
+### Rimasti (Vue-specific — da fare prima di Flutter o durante)
+- [ ] PERF-1 — Double sorting in HomePage
+- [ ] ARCH-3 — Supabase Realtime per shared wallets
+- [ ] ARCH-5 — Estrarre logica dialog da App.vue
+- [ ] ARCH-6 — Magic timeouts in App.vue
+
+### Esclusi deliberatamente (non necessari pre-Flutter)
+- ARCH-1 (Pinia) — overhead enorme, la logica migra a Riverpod
+- ARCH-4 (Vue Router) — sarà go_router in Flutter
+- PERF-8 (select columns) — micro-ottimizzazione

@@ -1,21 +1,8 @@
 import { ref, computed } from 'vue'
-import { supabase } from '../lib/supabase'
+import { supabase, type DbBankConnection, type DbBankTransaction } from '../lib/supabase'
+import { extractMerchantFromDescription } from '../lib/banking-utils'
 import { useAuth } from './useAuth'
 import { useExpenses } from './useExpenses'
-
-// ── Utility: estrae nome merchant da description Fineco ─────
-// Rimuove parti variabili (carta, data operazione, ecc.)
-function extractMerchantFromDescription(description: string): string | null {
-  if (!description) return null
-  let s = description
-  s = s.replace(/Carta\s*N\.\s*[\*\d\s]+/gi, '')
-  s = s.replace(/Data\s*operazione\s*\d{2}\/\d{2}\/\d{2,4}/gi, '')
-  s = s.replace(/Data\s*accredito:\s*\d{2}\/\d{2}\/\d{4}/gi, '')
-  s = s.replace(/\*\d+/g, '')
-  s = s.trim().replace(/\s+/g, ' ')
-  if (s.length < 3) return null
-  return s
-}
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -62,13 +49,14 @@ export interface Aspsp {
 
 const connections = ref<BankConnection[]>([])
 const bankTransactions = ref<BankTransaction[]>([])
-const loading = ref(false)
+const _pendingOps = ref(0)
+const loading = computed(() => _pendingOps.value > 0)
 const syncing = ref(false)
 const error = ref<string | null>(null)
 
 // ── Helpers ─────────────────────────────────────────────────
 
-function transformConnection(row: any): BankConnection {
+function transformConnection(row: DbBankConnection): BankConnection {
   return {
     id: row.id,
     institutionName: row.institution_name,
@@ -82,14 +70,14 @@ function transformConnection(row: any): BankConnection {
   }
 }
 
-function transformTransaction(row: any): BankTransaction {
+function transformTransaction(row: DbBankTransaction): BankTransaction {
   return {
     id: row.id,
     connectionId: row.connection_id,
     externalId: row.external_id,
     bookingDate: row.booking_date,
     valueDate: row.value_date,
-    amount: parseFloat(row.amount),
+    amount: typeof row.amount === 'string' ? parseFloat(row.amount) : row.amount,
     currency: row.currency,
     description: row.description,
     counterpartName: row.counterpart_name,
@@ -141,6 +129,7 @@ export function useBanking() {
       .order('created_at', { ascending: false })
 
     if (err) {
+      error.value = err.message
       console.error('Error fetching connections:', err)
       return
     }
@@ -183,6 +172,7 @@ export function useBanking() {
     const { data, error: err } = await query
 
     if (err) {
+      error.value = err.message
       console.error('Error fetching bank transactions:', err)
       return
     }
@@ -200,7 +190,7 @@ export function useBanking() {
   // ── Avvia connessione banca ─────────────────────────────
 
   async function startBankConnection(aspspName: string, aspspCountry: string = 'IT') {
-    loading.value = true
+    _pendingOps.value++
     error.value = null
 
     try {
@@ -219,14 +209,14 @@ export function useBanking() {
       error.value = err.message
       console.error('Error starting bank connection:', err)
     } finally {
-      loading.value = false
+      _pendingOps.value--
     }
   }
 
   // ── Completa connessione (dopo callback) ────────────────
 
   async function completeBankConnection(code: string) {
-    loading.value = true
+    _pendingOps.value++
     error.value = null
 
     try {
@@ -255,7 +245,7 @@ export function useBanking() {
       console.error('Error completing bank connection:', err)
       throw err
     } finally {
-      loading.value = false
+      _pendingOps.value--
     }
   }
 
@@ -272,16 +262,25 @@ export function useBanking() {
       const dateFrom = new Date()
       dateFrom.setMonth(dateFrom.getMonth() - 3)
 
-      let totalImported = 0
+      const dateTo = new Date().toISOString().split('T')[0]
+      const dateFromStr = dateFrom.toISOString().split('T')[0]
 
-      for (const accountId of accounts) {
-        const data = await callBankingAuth('get-transactions', {
-          account_id: accountId,
-          date_from: dateFrom.toISOString().split('T')[0],
-          date_to: new Date().toISOString().split('T')[0],
-        })
-        totalImported += data.imported || 0
-      }
+      // Parallelizza il sync di tutti gli account
+      const results = await Promise.allSettled(
+        accounts.map(accountId =>
+          callBankingAuth('get-transactions', {
+            account_id: accountId,
+            date_from: dateFromStr,
+            date_to: dateTo,
+          })
+        )
+      )
+
+      const totalImported = results.reduce((sum, r) => {
+        if (r.status === 'fulfilled') return sum + (r.value.imported || 0)
+        console.error('Error syncing account:', r.reason)
+        return sum
+      }, 0)
 
       // Ricarica transazioni e connessioni
       await Promise.all([fetchBankTransactions(), fetchConnections()])
@@ -347,10 +346,12 @@ export function useBanking() {
 
   async function deleteConnection(connectionId: string) {
     // Prima elimina le transazioni associate
-    await supabase
+    const { error: txErr } = await supabase
       .from('bank_transactions')
       .delete()
       .eq('connection_id', connectionId)
+
+    if (txErr) throw txErr
 
     const { error: err } = await supabase
       .from('bank_connections')

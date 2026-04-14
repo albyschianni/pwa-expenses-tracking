@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { supabase, type DbExpense } from '../lib/supabase'
+import { extractMerchantFromDescription } from '../lib/banking-utils'
 import { useAuth } from './useAuth'
 import { useSelectedMonth } from './useSelectedMonth'
 import { useCategories } from './useCategories'
@@ -42,7 +43,8 @@ export function getCategoryConfig(id: string): Category {
 
 // Shared reactive state (singleton pattern)
 const expenses = ref<Expense[]>([])
-const loading = ref(false)
+const _pendingOps = ref(0)
+const loading = computed(() => _pendingOps.value > 0)
 const error = ref<string | null>(null)
 
 let currentLoadedMonth: string | null = null
@@ -97,7 +99,7 @@ export function useExpenses() {
 
     if (currentLoadedMonth !== targetMonth) expenses.value = []
 
-    loading.value = true
+    _pendingOps.value++
     error.value = null
 
     try {
@@ -122,7 +124,7 @@ export function useExpenses() {
       error.value = e.message || 'Failed to fetch expenses'
       console.error('Fetch expenses error:', e)
     } finally {
-      loading.value = false
+      _pendingOps.value--
     }
   }
 
@@ -176,7 +178,7 @@ export function useExpenses() {
   }) {
     if (!user.value) throw new Error('Not authenticated')
 
-    loading.value = true
+    _pendingOps.value++
     error.value = null
 
     try {
@@ -207,7 +209,7 @@ export function useExpenses() {
       error.value = e.message || 'Failed to add expense'
       throw e
     } finally {
-      loading.value = false
+      _pendingOps.value--
     }
   }
 
@@ -223,7 +225,7 @@ export function useExpenses() {
   ) {
     if (!user.value) throw new Error('Not authenticated')
 
-    loading.value = true
+    _pendingOps.value++
     error.value = null
 
     try {
@@ -245,15 +247,9 @@ export function useExpenses() {
 
         // Apprendi la correzione manuale: crea regola per la prossima volta
         if (data.category !== undefined && existing?.description) {
-          // Rimuove parti variabili (data operazione, numero carta) per estrarre solo il merchant
-          let merchantKey = existing.description
-          merchantKey = merchantKey.replace(/Carta\s*N\.\s*[\*\d\s]+/gi, '')
-          merchantKey = merchantKey.replace(/Data\s*operazione\s*\d{2}\/\d{2}\/\d{2,4}/gi, '')
-          merchantKey = merchantKey.replace(/Data\s*accredito:\s*\d{2}\/\d{2}\/\d{4}/gi, '')
-          merchantKey = merchantKey.replace(/\*\d+/g, '')
-          merchantKey = merchantKey.trim().replace(/\s+/g, ' ').toUpperCase()
+          const merchantKey = extractMerchantFromDescription(existing.description)
 
-          if (merchantKey.length >= 3) {
+          if (merchantKey) {
             await supabase
               .from('categorization_rules')
               .upsert({
@@ -328,7 +324,7 @@ export function useExpenses() {
       error.value = e.message || 'Failed to update expense'
       throw e
     } finally {
-      loading.value = false
+      _pendingOps.value--
     }
   }
 
@@ -349,7 +345,9 @@ export function useExpenses() {
 
   // Marca tutte le transazioni bancarie non revisionate come "viste" nel DB
   // ma senza toccare lo stato locale — così i badge restano visibili questa sessione
-  // e spariscono alla prossima apertura dell'app
+  // e spariscono alla prossima apertura dell'app.
+  // Usa visibilitychange per garantire che il DB venga aggiornato
+  // anche se l'utente chiude/minimizza l'app subito.
   function scheduleMarkAllReviewed() {
     const unreviewedIds = expenses.value
       .filter(e => e.source === 'bank' && !e.reviewed)
@@ -357,23 +355,39 @@ export function useExpenses() {
 
     if (unreviewedIds.length === 0) return
 
-    setTimeout(async () => {
+    let done = false
+    const doMark = async () => {
+      if (done) return
+      done = true
+      document.removeEventListener('visibilitychange', onVisChange)
       await supabase
         .from('bank_transactions')
         .update({ reviewed: true })
         .in('id', unreviewedIds)
-    }, 5000)
+    }
+
+    const onVisChange = () => {
+      if (document.visibilityState === 'hidden') doMark()
+    }
+
+    // Segna come reviewed quando l'utente lascia la pagina o dopo 5s (quello che arriva prima)
+    document.addEventListener('visibilitychange', onVisChange)
+    setTimeout(doMark, 5000)
   }
 
   async function deleteExpense(id: string) {
     if (!user.value) throw new Error('Not authenticated')
 
-    loading.value = true
+    _pendingOps.value++
     error.value = null
 
     try {
+      // Determina la tabella corretta in base alla source
+      const existing = expenses.value.find(e => e.id === id)
+      const table = existing?.source === 'bank' ? 'bank_transactions' : 'expenses'
+
       const { error: deleteError } = await supabase
-        .from('expenses')
+        .from(table)
         .delete()
         .eq('id', id)
 
@@ -385,7 +399,7 @@ export function useExpenses() {
       error.value = e.message || 'Failed to delete expense'
       throw e
     } finally {
-      loading.value = false
+      _pendingOps.value--
     }
   }
 

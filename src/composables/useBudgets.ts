@@ -33,7 +33,7 @@ let loadedMonth: string | null = null
 let watcherInitialized = false
 
 export function useBudgets() {
-  const { user } = useAuth()
+  const { user, isAuthenticated } = useAuth()
   const { monthKey } = useSelectedMonth()
   const { expenses } = useExpenses()
 
@@ -106,8 +106,8 @@ export function useBudgets() {
   async function init() {
     if (!user.value) return
     loading.value = true
-    await fetchTemplates()
-    await fetchMonthlyBudgets(monthKey.value)
+    // Le prime due query sono indipendenti — parallelizzare
+    await Promise.all([fetchTemplates(), fetchMonthlyBudgets(monthKey.value)])
     await ensureMonthlyBudgets(monthKey.value)
     loading.value = false
   }
@@ -199,15 +199,40 @@ export function useBudgets() {
   }
 
   // Tutte le categorie con budget configurato e il loro stato
-  const allBudgetStatuses = computed(() =>
-    [...activeBudgets.value.keys()].map(id => getBudgetStatus(id)).filter(Boolean) as BudgetStatus[]
-  )
+  // Pre-aggrega le spese per categoria in un singolo pass O(n) invece di O(n×m)
+  const allBudgetStatuses = computed(() => {
+    const spentByCategory = new Map<string, number>()
+    for (const e of expenses.value) {
+      if (e.type === 'expense') {
+        spentByCategory.set(e.category, (spentByCategory.get(e.category) ?? 0) + e.amount)
+      }
+    }
+    return [...activeBudgets.value.entries()]
+      .map(([categoryId, budgeted]) => {
+        const spent = spentByCategory.get(categoryId) ?? 0
+        return {
+          categoryId,
+          budgeted,
+          spent,
+          remaining: budgeted - spent,
+          percentage: budgeted > 0 ? Math.round((spent / budgeted) * 100) : 0,
+        }
+      })
+  })
 
   const hasBudgets = computed(() => activeBudgets.value.size > 0)
 
   if (!watcherInitialized) {
     watcherInitialized = true
     watch(monthKey, (newMonth) => refreshForMonth(newMonth))
+
+    watch(isAuthenticated, (authenticated) => {
+      if (!authenticated) {
+        templates.value = []
+        monthlyBudgets.value = []
+        loadedMonth = null
+      }
+    })
   }
 
   return {
