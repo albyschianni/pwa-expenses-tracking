@@ -92,16 +92,16 @@ const loading = computed(() => pendingOps.value > 0)
 
 ---
 
-### [ ] SERIOUS-3: `autoGenerationChecked` non si resetta in alcune condizioni
+### [x] SERIOUS-3: `autoGenerationChecked` non si resetta in alcune condizioni
 **File:** `src/composables/useRecurringExpenses.ts:28`  
 **Problema:** Il flag `autoGenerationChecked` è a livello modulo. In HMR durante sviluppo, il modulo non si ricarica e il flag rimane `true`, impedendo la verifica delle ricorrenti al prossimo hot reload.  
-**Nota:** In produzione non è un problema perché non c'è HMR, ma è fragile.
+**Nota:** Già gestito: il watcher su `isAuthenticated` (riga 309) resetta il flag al logout. Il problema HMR residuo è Vue-specific e irrilevante per Flutter.
 
 ---
 
 ## Performance bottlenecks
 
-### [ ] PERF-1: Doppio sorting sulle stesse transazioni
+### [x] PERF-1: Doppio sorting sulle stesse transazioni
 **File:** `src/composables/useExpenses.ts:155-157` → `src/pages/HomePage.vue:463-485`  
 **Problema:** `sortedExpenses` (computed) fa spread + sort su `expenses.value`. `localSorted` in HomePage usa `expenses.value` direttamente (non `sortedExpenses`) e ri-sortisce. Double work.  
 **Fix:** In `HomePage.vue`, usare `sortedExpenses` come base di `localSorted` per evitare il sort ridondante quando `sortMode === 'date-desc'`.
@@ -206,7 +206,7 @@ Quasi ogni query usa `select('*')`. Esempio: `fetchBankTransactions` porta `coun
 
 ---
 
-### [ ] ARCH-3: Nessun Supabase Realtime per shared wallets
+### [x] ARCH-3: Nessun Supabase Realtime per shared wallets
 **Problema:** Le transazioni di altri utenti nello stesso wallet non appaiono in tempo reale. Nessun `supabase.channel()` in tutto il codebase.  
 **Fix (minimo):**
 ```typescript
@@ -229,7 +229,7 @@ supabase.channel(`wallet-${wallet.id}`)
 
 ---
 
-### [ ] ARCH-5: App.vue è un God Component (490 righe)
+### [x] ARCH-5: App.vue è un God Component (490 righe)
 **Problema:** Gestisce routing, tutti i dialog state, CRUD handlers, init di 10 composables, service worker, push notification prompting.  
 **Fix:** Estrarre:
 - `useAppDialogs.ts` → stati dialog + handlers
@@ -237,7 +237,7 @@ supabase.channel(`wallet-${wallet.id}`)
 
 ---
 
-### [ ] ARCH-6: Magic timeouts nell'inizializzazione
+### [x] ARCH-6: Magic timeouts nell'inizializzazione
 **File:** `src/App.vue:365-376`
 ```typescript
 setTimeout(() => checkForUpdates(), 500)
@@ -266,12 +266,12 @@ function getCategoryById(id: string) { return categories.value.find(c => c.id ==
 
 ---
 
-### [ ] CQ-3: `updateProfile` usa `any`
+### [x] CQ-3: `updateProfile` usa `any`
 **File:** `src/composables/useAuth.ts:163`
 ```typescript
 const updateData: any = {}  // ← perdita type safety
 ```
-**Fix:** Tipare con il tipo `UserAttributes` di Supabase.
+**Fix:** Tipato con `UserAttributes` importato da `@supabase/supabase-js`.
 
 ---
 
@@ -371,12 +371,14 @@ Il banking OAuth su mobile non può usare `window.location` per il callback. Va 
 - [x] ARCH-2 — extractMerchantFromDescription estratta in src/lib/banking-utils.ts
 - [x] CQ-2 — Aggiunti DbBankConnection e DbBankTransaction in supabase.ts
 - [x] CQ-5 — fetchConnections e fetchBankTransactions ora aggiornano error.value
+- [x] SERIOUS-3 — autoGenerationChecked già resettato al logout (HMR-only, irrilevante per Flutter)
+- [x] CQ-3 — updateProfile tipato con UserAttributes invece di any
 
-### Rimasti (Vue-specific — da fare prima di Flutter o durante)
-- [ ] PERF-1 — Double sorting in HomePage
-- [ ] ARCH-3 — Supabase Realtime per shared wallets
-- [ ] ARCH-5 — Estrarre logica dialog da App.vue
-- [ ] ARCH-6 — Magic timeouts in App.vue
+### Risolti (2026-04-16)
+- [x] PERF-1 — Rimosso sort ridondante in HomePage per date-desc (già ordinato da Supabase)
+- [x] ARCH-3 — Aggiunto Supabase Realtime su shared wallets (subscribe/unsubscribe in setActiveWallet)
+- [x] ARCH-5 — Dialog state e handlers estratti in useAppDialogs.ts (App.vue -100 righe)
+- [x] ARCH-6 — Magic timeouts sostituiti con requestIdleCallback
 
 ### Esclusi deliberatamente (non necessari pre-Flutter)
 - ARCH-1 (Pinia) — overhead enorme, la logica migra a Riverpod

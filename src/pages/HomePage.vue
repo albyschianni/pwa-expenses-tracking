@@ -469,18 +469,17 @@ const localSorted = computed(() => {
   const filtered = typeFilter.value === 'all'
     ? [...source]
     : source.filter(e => e.type === typeFilter.value)
-  const list = filtered
   switch (sortMode.value) {
     case 'date-desc':
-      return list.sort((a, b) => b.date.localeCompare(a.date))
+      return filtered // già ordinato date-desc da Supabase
     case 'date-asc':
-      return list.sort((a, b) => a.date.localeCompare(b.date))
+      return filtered.sort((a, b) => a.date.localeCompare(b.date))
     case 'price-desc':
-      return list.sort((a, b) => b.amount - a.amount)
+      return filtered.sort((a, b) => b.amount - a.amount)
     case 'price-asc':
-      return list.sort((a, b) => a.amount - b.amount)
+      return filtered.sort((a, b) => a.amount - b.amount)
     default:
-      return list
+      return filtered
   }
 })
 </script>

@@ -52,6 +52,7 @@ const walletTransactions = ref<WalletTransaction[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 let initialized = false
+let realtimeChannel: ReturnType<typeof supabase.channel> | null = null
 
 export function useSharedWallets() {
   const { user, isAuthenticated } = useAuth()
@@ -348,11 +349,30 @@ export function useSharedWallets() {
   }
 
   async function setActiveWallet(wallet: SharedWallet | null) {
+    // Cleanup sottoscrizione precedente
+    if (realtimeChannel) {
+      supabase.removeChannel(realtimeChannel)
+      realtimeChannel = null
+    }
+
     activeWallet.value = wallet
     if (wallet) {
       // Fetch members first so their info is available for transaction attribution
       await fetchMembers(wallet.id)
       await fetchWalletTransactions(wallet.id)
+
+      // Realtime: aggiorna transazioni quando altri utenti modificano il wallet
+      realtimeChannel = supabase
+        .channel(`wallet-${wallet.id}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'expenses',
+          filter: `shared_wallet_id=eq.${wallet.id}`,
+        }, () => {
+          fetchWalletTransactions(wallet.id)
+        })
+        .subscribe()
     } else {
       walletMembers.value = []
       walletTransactions.value = []
@@ -389,6 +409,10 @@ export function useSharedWallets() {
       if (auth) {
         fetchWallets()
       } else {
+        if (realtimeChannel) {
+          supabase.removeChannel(realtimeChannel)
+          realtimeChannel = null
+        }
         wallets.value = []
         activeWallet.value = null
         walletMembers.value = []

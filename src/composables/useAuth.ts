@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
-import type { User, Session } from '@supabase/supabase-js'
+import type { User, Session, UserAttributes } from '@supabase/supabase-js'
 
 // Check if this page load comes from a password recovery email link
 // Must run before Supabase processes the URL hash
@@ -161,7 +161,7 @@ export function useAuth() {
     loading.value = true
 
     try {
-      const updateData: any = {}
+      const updateData: UserAttributes = {}
 
       if (data.displayName !== undefined) {
         updateData.data = { display_name: data.displayName }

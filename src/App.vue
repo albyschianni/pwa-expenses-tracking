@@ -195,16 +195,16 @@ import WalletsPage from "./pages/WalletsPage.vue"
 import BankConnectionPage from "./pages/BankConnectionPage.vue"
 import BankTransactionsPage from "./pages/BankTransactionsPage.vue"
 import BankCallbackHandler from "./components/BankCallbackHandler.vue"
-import { useExpenses, type Expense } from "./composables/useExpenses"
+import { useExpenses } from "./composables/useExpenses"
 import { useAuth } from "./composables/useAuth"
-import { useRecurringExpenses, type RecurringExpense } from "./composables/useRecurringExpenses"
-import { useSharedWallets } from "./composables/useSharedWallets"
+import { useRecurringExpenses } from "./composables/useRecurringExpenses"
 import { useWalletInvitations } from "./composables/useWalletInvitations"
 import { usePushNotifications } from "./composables/usePushNotifications"
 import { useCategories } from "./composables/useCategories"
 import { useBanking } from "./composables/useBanking"
 import { useFeatureFlags } from "./composables/useFeatureFlags"
 import { useBudgets } from "./composables/useBudgets"
+import { useAppDialogs } from "./composables/useAppDialogs"
 import WhatsNewModal from "./components/WhatsNewModal.vue"
 import NotificationPermissionDialog from "./components/NotificationPermissionDialog.vue"
 import { useWhatsNew } from "./composables/useWhatsNew"
@@ -216,9 +216,8 @@ if ('serviceWorker' in navigator) {
   })
 }
 
-const { addExpense, updateExpense, deleteExpense, fetchExpenses, markBankTransactionReviewed, scheduleMarkAllReviewed } = useExpenses()
+const { fetchExpenses, scheduleMarkAllReviewed } = useExpenses()
 const { isAuthenticated, isPasswordRecovery, loading: authLoading } = useAuth()
-const { activeWallet, addWalletTransaction } = useSharedWallets()
 const { fetchPendingInvitations } = useWalletInvitations()
 const { pushSupported, permissionState, checkSubscription } = usePushNotifications()
 const { fetchCategories } = useCategories()
@@ -226,13 +225,18 @@ const { fetchConnections, fetchBankTransactions } = useBanking()
 const { loadFlags, isEnabled } = useFeatureFlags()
 const { checkForUpdates } = useWhatsNew()
 const { init: initBudgets } = useBudgets()
+const { fetchRecurringExpenses, processAutoGeneration } = useRecurringExpenses()
+
+// Dialog state e handlers estratti in composable dedicato
 const {
-  addRecurringExpense,
-  updateRecurringExpense,
-  deleteRecurringExpense,
-  fetchRecurringExpenses,
-  processAutoGeneration
-} = useRecurringExpenses()
+  monthPickerOpen, expenseDialogOpen, expenseDetailOpen, recurringDialogOpen,
+  menuOpen, avatarViewerOpen, showPushPrompt,
+  expenseToEdit, selectedExpense, recurringToEdit,
+  openCreateExpense, openExpenseDetail, openEditExpense, closeExpenseDialog,
+  handleSaveExpense, handleDeleteExpense,
+  openCreateRecurring, openEditRecurring, closeRecurringDialog,
+  handleSaveRecurring, handleDeleteRecurring,
+} = useAppDialogs()
 
 // Maintenance mode state
 const maintenanceMode = ref(false)
@@ -323,24 +327,6 @@ watch(activeTab, () => {
   }
 })
 
-// Dialog states
-const monthPickerOpen = ref(false)
-const expenseDialogOpen = ref(false)
-const expenseDetailOpen = ref(false)
-const recurringDialogOpen = ref(false)
-const menuOpen = ref(false)
-const avatarViewerOpen = ref(false)
-const showPushPrompt = ref(false)
-
-// Expense being edited (null = create mode)
-const expenseToEdit = ref<Expense | null>(null)
-
-// Selected expense for detail view
-const selectedExpense = ref<Expense | null>(null)
-
-// Recurring expense being edited (null = create mode)
-const recurringToEdit = ref<RecurringExpense | null>(null)
-
 // Fetch expenses and recurring expenses when authenticated
 // Parallelize independent fetches, then run auto-generation
 watch(isAuthenticated, async (authenticated) => {
@@ -361,20 +347,27 @@ watch(isAuthenticated, async (authenticated) => {
         fetchConnections()
         fetchBankTransactions()
       }
-      // Defer non-critical tasks so they don't compete with initial UI render
-      setTimeout(() => checkForUpdates(), 500)
-      setTimeout(() => checkSubscription(), 1500)
+      // Defer non-critical tasks: esegui dopo che il browser ha completato il rendering iniziale
+      const defer = (fn: () => void) =>
+        'requestIdleCallback' in window
+          ? requestIdleCallback(fn)
+          : setTimeout(fn, 200)
+
+      defer(() => {
+        checkForUpdates()
+        checkSubscription()
+      })
 
       // Auto-prompt push notifications for installed PWA users
       const isInstalledPwa = window.matchMedia('(display-mode: standalone)').matches
         || (navigator as any).standalone === true
       if (isInstalledPwa && pushSupported.value && permissionState.value !== 'granted') {
-        // Show after WhatsNew modal has had time to appear and be dismissed
-        setTimeout(() => {
+        // Mostra dopo che l'init è completato e il browser è idle
+        defer(() => {
           if (permissionState.value !== 'granted') {
             showPushPrompt.value = true
           }
-        }, 2500)
+        })
       }
     }
   }
@@ -387,104 +380,4 @@ document.addEventListener('visibilitychange', () => {
   }
 })
 
-// ============================================================
-// CREATE EXPENSE
-// ============================================================
-function openCreateExpense() {
-  expenseToEdit.value = null
-  expenseDialogOpen.value = true
-}
-
-// ============================================================
-// VIEW EXPENSE DETAIL
-// ============================================================
-function openExpenseDetail(expense: Expense) {
-  selectedExpense.value = expense
-  expenseDetailOpen.value = true
-  markBankTransactionReviewed(expense.id)
-}
-
-// ============================================================
-// EDIT EXPENSE
-// ============================================================
-function openEditExpense(expense: Expense) {
-  expenseDetailOpen.value = false
-  expenseToEdit.value = expense
-  expenseDialogOpen.value = true
-}
-
-function closeExpenseDialog() {
-  expenseDialogOpen.value = false
-  expenseToEdit.value = null
-}
-
-// ============================================================
-// SAVE EXPENSE (Create or Update)
-// ============================================================
-async function handleSaveExpense(data: { description: string; date: string; amount: number; category: string; type: 'expense' | 'income' }) {
-  try {
-    if (expenseToEdit.value) {
-      await updateExpense(expenseToEdit.value.id, data)
-    } else if (activeWallet.value) {
-      // Shared wallet mode: add to the active wallet
-      await addWalletTransaction(activeWallet.value.id, data)
-    } else {
-      await addExpense(data)
-    }
-    closeExpenseDialog()
-  } catch (e) {
-    console.error('Failed to save expense:', e)
-  }
-}
-
-// ============================================================
-// DELETE EXPENSE
-// ============================================================
-async function handleDeleteExpense(expenseId: string) {
-  try {
-    await deleteExpense(expenseId)
-  } catch (e) {
-    console.error('Failed to delete expense:', e)
-  }
-}
-
-// ============================================================
-// RECURRING EXPENSES
-// ============================================================
-function openCreateRecurring() {
-  recurringToEdit.value = null
-  recurringDialogOpen.value = true
-}
-
-function openEditRecurring(item: RecurringExpense) {
-  recurringToEdit.value = item
-  recurringDialogOpen.value = true
-}
-
-function closeRecurringDialog() {
-  recurringDialogOpen.value = false
-  recurringToEdit.value = null
-}
-
-async function handleSaveRecurring(data: { description: string; amount: number; category: string; dayOfMonth: number; type: 'expense' | 'income' }) {
-  try {
-    if (recurringToEdit.value) {
-      await updateRecurringExpense(recurringToEdit.value.id, data)
-    } else {
-      await addRecurringExpense(data)
-    }
-    closeRecurringDialog()
-  } catch (e) {
-    console.error('Failed to save recurring expense:', e)
-  }
-}
-
-async function handleDeleteRecurring(id: string) {
-  try {
-    await deleteRecurringExpense(id)
-    closeRecurringDialog()
-  } catch (e) {
-    console.error('Failed to delete recurring expense:', e)
-  }
-}
 </script>
