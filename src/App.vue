@@ -168,8 +168,8 @@
     <!-- PUSH NOTIFICATION PROMPT (auto for installed PWA) -->
     <NotificationPermissionDialog
       :open="showPushPrompt"
-      @close="showPushPrompt = false"
-      @granted="showPushPrompt = false"
+      @close="handlePushPromptClose"
+      @granted="handlePushPromptClose"
     />
   </div>
 </template>
@@ -214,6 +214,24 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     window.location.reload()
   })
+}
+
+// Shared key with WalletsPage. Stores the timestamp (ms) of the last prompt so
+// we can re-ask after a cooldown window instead of nagging on every session.
+const PUSH_PROMPT_KEY = 'push_notification_prompted_at'
+const PUSH_PROMPT_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000
+
+function pushPromptOnCooldown(): boolean {
+  const raw = localStorage.getItem(PUSH_PROMPT_KEY)
+  if (!raw) return false
+  const last = Number(raw)
+  if (!Number.isFinite(last)) return true
+  return Date.now() - last < PUSH_PROMPT_COOLDOWN_MS
+}
+
+function handlePushPromptClose() {
+  showPushPrompt.value = false
+  localStorage.setItem(PUSH_PROMPT_KEY, String(Date.now()))
 }
 
 const { fetchExpenses, scheduleMarkAllReviewed } = useExpenses()
@@ -358,13 +376,20 @@ watch(isAuthenticated, async (authenticated) => {
         checkSubscription()
       })
 
-      // Auto-prompt push notifications for installed PWA users
+      // Auto-prompt push notifications for installed PWA users.
+      // Show only if the user has never granted permission (`default`) AND we're
+      // not within the cooldown window from the last dismissal. We deliberately
+      // skip `denied` because re-asking is a no-op on iOS and just nags the user.
       const isInstalledPwa = window.matchMedia('(display-mode: standalone)').matches
         || (navigator as any).standalone === true
-      if (isInstalledPwa && pushSupported.value && permissionState.value !== 'granted') {
-        // Mostra dopo che l'init è completato e il browser è idle
+      if (
+        isInstalledPwa
+        && pushSupported.value
+        && permissionState.value === 'default'
+        && !pushPromptOnCooldown()
+      ) {
         defer(() => {
-          if (permissionState.value !== 'granted') {
+          if (permissionState.value === 'default') {
             showPushPrompt.value = true
           }
         })

@@ -344,15 +344,25 @@ async function fetchWalletPendingInvites() {
   }
 }
 
-// Check if push notification prompt should be shown (first time on wallets tab)
-const PUSH_PROMPT_KEY = 'push_notification_prompted'
+// Shared with App.vue auto-prompt: timestamp of last dismissal, 30-day cooldown.
+const PUSH_PROMPT_KEY = 'push_notification_prompted_at'
+const PUSH_PROMPT_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000
+
+function pushPromptOnCooldown(): boolean {
+  const raw = localStorage.getItem(PUSH_PROMPT_KEY)
+  if (!raw) return false
+  const last = Number(raw)
+  if (!Number.isFinite(last)) return true
+  return Date.now() - last < PUSH_PROMPT_COOLDOWN_MS
+}
 
 onMounted(() => {
-  if (pushSupported.value && permissionState.value === 'default') {
-    const alreadyPrompted = localStorage.getItem(PUSH_PROMPT_KEY)
-    if (!alreadyPrompted) {
-      showNotificationDialog.value = true
-    }
+  if (
+    pushSupported.value
+    && permissionState.value === 'default'
+    && !pushPromptOnCooldown()
+  ) {
+    showNotificationDialog.value = true
   }
   // If already granted, ensure subscription is active
   if (permissionState.value === 'granted') {
@@ -362,11 +372,11 @@ onMounted(() => {
 
 function handleNotificationDialogClose() {
   showNotificationDialog.value = false
-  localStorage.setItem(PUSH_PROMPT_KEY, 'true')
+  localStorage.setItem(PUSH_PROMPT_KEY, String(Date.now()))
 }
 
 function handleNotificationGranted() {
-  localStorage.setItem(PUSH_PROMPT_KEY, 'true')
+  localStorage.setItem(PUSH_PROMPT_KEY, String(Date.now()))
 }
 
 async function handleCreateWallet() {
