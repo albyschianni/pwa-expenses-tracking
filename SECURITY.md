@@ -44,6 +44,31 @@ All database tables have **Row Level Security (RLS)** enabled:
 - Categories with existing transactions cannot be hard-deleted (trigger protection).
 - Wallet creators are automatically added as owners (database trigger).
 
+## Data API Grants (PostgREST / supabase-js)
+
+Starting **2026-10-30**, Supabase no longer exposes tables in the `public` schema to the Data API by default — only objects with explicit `GRANT` statements are reachable via supabase-js, PostgREST, or GraphQL. RLS is enforced *after* the grant check, so a missing grant produces a `42501 permission denied` error before any policy runs.
+
+**Convention for every new migration that creates a table or view in `public`:**
+
+```sql
+create table public.your_table (
+  -- columns…
+);
+
+-- Required for Data API access (supabase-js / PostgREST / GraphQL)
+grant select, insert, update, delete on public.your_table to authenticated;
+grant select, insert, update, delete on public.your_table to service_role;
+-- Do NOT grant to `anon` unless the table is meant to be readable pre-auth.
+
+alter table public.your_table enable row level security;
+
+-- …RLS policies…
+```
+
+For **views**, grant only `select` (writes go through the underlying tables) and remember to set `security_invoker = true` so RLS on base tables is enforced under the caller's role.
+
+The backfill that makes all existing tables explicit lives in [supabase/migrations/20260514_001_explicit_data_api_grants.sql](supabase/migrations/20260514_001_explicit_data_api_grants.sql).
+
 ## Service Worker Security
 
 - The PWA service worker (Workbox) only caches **static assets** (JS, CSS, HTML, images).
