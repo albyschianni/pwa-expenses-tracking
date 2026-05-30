@@ -11,24 +11,24 @@ A mobile-first Progressive Web App for personal finance management. Track expens
 
 ---
 
-## 📱 Installa l'app sul telefono
+## 📱 Install the app on your phone
 
-L'app è una PWA, quindi puoi installarla sulla home del telefono e usarla come una normale app (a schermo intero, senza la barra del browser).
+It's a PWA, so you can install it to your home screen and use it like a native app (full-screen, no browser bar).
 
 ### iPhone / iPad (Safari)
 
-1. Apri [spendtrace.app](https://www.spendtrace.app) **con Safari**
-2. Tocca il pulsante **Condividi** (l'icona del quadrato con la freccia verso l'alto, in basso)
-3. Scorri e tocca **Aggiungi alla schermata Home** (_Add to Home Screen_)
-4. Dai all'app il nome che preferisci e tocca **Aggiungi**
-5. Chiudi Safari e apri l'app dalla sua icona sulla home: si avvierà a schermo intero, come una normale app
+1. Open [spendtrace.app](https://www.spendtrace.app) **in Safari**
+2. Tap the **Share** button (the square-with-an-upward-arrow icon at the bottom)
+3. Scroll down and tap **Add to Home Screen**
+4. Give the app any name you like and tap **Add**
+5. Close Safari and open the app from its home-screen icon — it launches full-screen, just like a normal app
 
 ### Android (Chrome)
 
-1. Apri [spendtrace.app](https://www.spendtrace.app) con Chrome
-2. Tocca il menu **⋮** in alto a destra
-3. Tocca **Installa app** (oppure _Aggiungi alla schermata Home_)
-4. Conferma: l'icona comparirà sulla home e potrai aprirla come una normale app
+1. Open [spendtrace.app](https://www.spendtrace.app) in Chrome
+2. Tap the **⋮** menu in the top-right
+3. Tap **Install app** (or _Add to Home screen_)
+4. Confirm — the icon appears on your home screen and opens like a normal app
 
 ---
 
