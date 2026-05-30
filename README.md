@@ -212,6 +212,31 @@ The build outputs a fully self-contained PWA in `dist/` with a Workbox service w
 
 ---
 
+## What's Next
+
+- **Open Banking integration** — already wired up in demo mode against my
+  own account (via [Enable Banking](https://enablebanking.com)) to auto-import
+  transactions. The flow is end-to-end working; next step is multi-user
+  productionization and consent management.
+- **AI-assisted categorization** — exploring an LLM-based layer to suggest
+  categories for new transactions starting from sparse signals (merchant
+  name, amount, time-of-day, user history). Cold-start is the hard part.
+- **Native mobile version** — porting to a cross-platform native stack
+  (Flutter/React Native) for App Store + Play Store release.
+
+---
+
+## Architecture at a glance
+
+State management uses **singleton composables** instead of Pinia — each
+composable instantiates reactive state at module level, shared by reference
+across components. Supabase handles auth, storage, and PostgreSQL with RLS;
+the client is wrapped in a thin typed layer (`lib/supabase.ts`). The PWA
+shell is Workbox-based with `NetworkFirst` caching on Supabase calls, so
+the app stays usable offline with stale data.
+
+---
+
 ## Changelog
 
 ### v1.5.0
