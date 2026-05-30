@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
 
 // VAPID public key — must match the one in Supabase Edge Function secrets
-const VAPID_PUBLIC_KEY = 'BIffXA-ohfKT9ziKwtbQomhS6tagMDCMPKK4TEDuzIZlB6Ohn68NWXOsTB93t_-_K1gHJmYmPVtabx3UjmPrxlo'
+const VAPID_PUBLIC_KEY = 'BJmFgiUBsKet7iAxDnPfw0ulaPDMVU_FhWqf5Urv99zlX1tdwNseolBKDonR-0C9voQtQX-E56XYacqhr3F1_YE'
 
 const permissionState = ref<NotificationPermission>(
   typeof Notification !== 'undefined' ? Notification.permission : 'default'

@@ -1,11 +1,34 @@
 # 💸 Expense Tracker PWA
 
-A mobile-first Progressive Web App for personal finance management. Track expenses and income, set up recurring transactions, visualize spending, and export your data — all from a fast, installable app that works on any device.
+A mobile-first Progressive Web App for personal finance management. Track expenses and income, set up recurring transactions, visualize spending, and export your data all from a fast, installable app that works on any device.
+
+🔗 **Live app:** [spendtrace.app](https://www.spendtrace.app)
 
 ![Version](https://img.shields.io/badge/version-1.5.0-teal)
 ![Vue](https://img.shields.io/badge/Vue-3-brightgreen)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green)
+
+---
+
+## 📱 Installa l'app sul telefono
+
+L'app è una PWA, quindi puoi installarla sulla home del telefono e usarla come una normale app (a schermo intero, senza la barra del browser).
+
+### iPhone / iPad (Safari)
+
+1. Apri [spendtrace.app](https://www.spendtrace.app) **con Safari**
+2. Tocca il pulsante **Condividi** (l'icona del quadrato con la freccia verso l'alto, in basso)
+3. Scorri e tocca **Aggiungi alla schermata Home** (_Add to Home Screen_)
+4. Dai all'app il nome che preferisci e tocca **Aggiungi**
+5. Chiudi Safari e apri l'app dalla sua icona sulla home: si avvierà a schermo intero, come una normale app
+
+### Android (Chrome)
+
+1. Apri [spendtrace.app](https://www.spendtrace.app) con Chrome
+2. Tocca il menu **⋮** in alto a destra
+3. Tocca **Installa app** (oppure _Aggiungi alla schermata Home_)
+4. Conferma: l'icona comparirà sulla home e potrai aprirla come una normale app
 
 ---
 
@@ -27,16 +50,16 @@ A mobile-first Progressive Web App for personal finance management. Track expens
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend framework | Vue 3 (Composition API) |
-| Language | TypeScript 5 |
-| Styling | Tailwind CSS v4 (dark, mobile-first) |
-| Charts | Chart.js + vue-chartjs |
-| Backend / Auth / DB | Supabase (PostgreSQL) |
-| PWA | vite-plugin-pwa + Workbox |
-| Build tool | Vite 7 |
-| Deployment | Vercel |
+| Layer               | Technology                           |
+| ------------------- | ------------------------------------ |
+| Frontend framework  | Vue 3 (Composition API)              |
+| Language            | TypeScript 5                         |
+| Styling             | Tailwind CSS v4 (dark, mobile-first) |
+| Charts              | Chart.js + vue-chartjs               |
+| Backend / Auth / DB | Supabase (PostgreSQL)                |
+| PWA                 | vite-plugin-pwa + Workbox            |
+| Build tool          | Vite 7                               |
+| Deployment          | Vercel                               |
 
 ---
 
@@ -82,38 +105,42 @@ src/
 ## Database Schema
 
 ### `expenses`
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid PK | |
-| user_id | uuid FK → auth.users | |
-| description | text | |
-| date | date | ISO `YYYY-MM-DD` |
-| amount | numeric | Always positive; sign derived from `transaction_type` |
-| category_id | text FK → categories | |
-| transaction_type | text | `'expense'` \| `'income'`, default `'expense'` |
-| created_at / updated_at | timestamptz | |
+
+| Column                  | Type                 | Notes                                                 |
+| ----------------------- | -------------------- | ----------------------------------------------------- |
+| id                      | uuid PK              |                                                       |
+| user_id                 | uuid FK → auth.users |                                                       |
+| description             | text                 |                                                       |
+| date                    | date                 | ISO `YYYY-MM-DD`                                      |
+| amount                  | numeric              | Always positive; sign derived from `transaction_type` |
+| category_id             | text FK → categories |                                                       |
+| transaction_type        | text                 | `'expense'` \| `'income'`, default `'expense'`        |
+| created_at / updated_at | timestamptz          |                                                       |
 
 ### `recurring_expenses`
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid PK | |
-| user_id | uuid FK → auth.users | |
-| description | text | |
-| amount | numeric | Always positive |
-| category_id | text FK → categories | |
-| day_of_month | int | 1–28 |
-| enabled | boolean | default `true` |
-| last_generated_date | date | Prevents double-generation in same month |
-| transaction_type | text | `'expense'` \| `'income'`, default `'expense'` |
-| created_at / updated_at | timestamptz | |
+
+| Column                  | Type                 | Notes                                          |
+| ----------------------- | -------------------- | ---------------------------------------------- |
+| id                      | uuid PK              |                                                |
+| user_id                 | uuid FK → auth.users |                                                |
+| description             | text                 |                                                |
+| amount                  | numeric              | Always positive                                |
+| category_id             | text FK → categories |                                                |
+| day_of_month            | int                  | 1–28                                           |
+| enabled                 | boolean              | default `true`                                 |
+| last_generated_date     | date                 | Prevents double-generation in same month       |
+| transaction_type        | text                 | `'expense'` \| `'income'`, default `'expense'` |
+| created_at / updated_at | timestamptz          |                                                |
 
 ### `categories`
-| Column | Type | Notes |
-|---|---|---|
-| id | text PK | e.g. `'Ristoranti'`, `'Stipendio'` |
+
+| Column  | Type    | Notes                                          |
+| ------- | ------- | ---------------------------------------------- |
+| id      | text PK | e.g. `'Ristoranti'`, `'Stipendio'`             |
 | user_id | uuid FK | Per-user ordering/visibility stored separately |
 
 > **Migration snippets** (run in Supabase SQL Editor):
+>
 > ```sql
 > ALTER TABLE expenses
 >   ADD COLUMN IF NOT EXISTS transaction_type text NOT NULL DEFAULT 'expense'
@@ -129,6 +156,7 @@ src/
 ## Getting Started
 
 ### Prerequisites
+
 - Node.js ≥ 18
 - A [Supabase](https://supabase.com) project with the schema above
 
@@ -187,16 +215,19 @@ The build outputs a fully self-contained PWA in `dist/` with a Workbox service w
 ## Changelog
 
 ### v1.5.0
+
 - Type filter pills (Tutti / Spese / Entrate) on the transaction list
 - Improved home page header: SPESE / ENTRATE labeled stat blocks with vertical divider
 - FAB z-index fix: bottom half of the + button was intercepted by the tab grid overlay
 
 ### v1.4.0
+
 - Recurring income support with Spesa/Entrata toggle in the recurring dialog
 - Unified `ALL_CATEGORIES` architecture with O(1) category lookup
 - CSV export includes `Tipo` column; amounts signed correctly
 
 ### v1.3.0
+
 - Income/Expense transaction type toggle in add/edit dialog
 - Net balance hero replacing total-expenses counter
 - GraphicsPage: 3-card summary + Spese/Entrate chart toggle

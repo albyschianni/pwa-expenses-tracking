@@ -218,10 +218,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    // VAPID keys hardcoded because Supabase CLI `secrets set` corrupts the
-    // private key (the "--" in the base64url value is parsed as a flag separator).
-    const vapidPublicKey = 'BIffXA-ohfKT9ziKwtbQomhS6tagMDCMPKK4TEDuzIZlB6Ohn68NWXOsTB93t_-_K1gHJmYmPVtabx3UjmPrxlo'
-    const vapidPrivateKey = '0ZvVJNe85jFiXFRsMhv0sYwPUWR--EGDfFcIeVQBie0'
+    // Public key is safe to embed; private key is read from the VAPID_PRIVATE_KEY
+    // function secret. Set it via `supabase secrets set --env-file` — the bare
+    // `secrets set KEY=value` form corrupts the "--" inside the base64url value.
+    const vapidPublicKey = 'BJmFgiUBsKet7iAxDnPfw0ulaPDMVU_FhWqf5Urv99zlX1tdwNseolBKDonR-0C9voQtQX-E56XYacqhr3F1_YE'
+    const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY') ?? ''
     const vapidSubject = 'mailto:alberto.schianni.dev@gmail.com'
 
     const notificationPayload = JSON.stringify({

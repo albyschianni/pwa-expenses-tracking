@@ -3,9 +3,14 @@
 
 import { SignJWT, importJWK } from 'https://esm.sh/jose@5'
 
-// VAPID keys (same across all functions)
-const VAPID_PUBLIC_KEY = 'BIffXA-ohfKT9ziKwtbQomhS6tagMDCMPKK4TEDuzIZlB6Ohn68NWXOsTB93t_-_K1gHJmYmPVtabx3UjmPrxlo'
-const VAPID_PRIVATE_KEY = '0ZvVJNe85jFiXFRsMhv0sYwPUWR--EGDfFcIeVQBie0'
+// VAPID keys (same across all functions).
+// The public key is safe to embed (it ships to every browser anyway).
+// The private key MUST stay secret — it is read from the function secret
+// VAPID_PRIVATE_KEY. Set it with `supabase secrets set --env-file` (NOT the
+// bare `secrets set KEY=value` form, which parses the `--` inside the
+// base64url value as a flag separator and corrupts the key).
+const VAPID_PUBLIC_KEY = 'BJmFgiUBsKet7iAxDnPfw0ulaPDMVU_FhWqf5Urv99zlX1tdwNseolBKDonR-0C9voQtQX-E56XYacqhr3F1_YE'
+const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? ''
 const VAPID_SUBJECT = 'mailto:alberto.schianni.dev@gmail.com'
 
 function base64UrlToUint8Array(base64Url: string): Uint8Array {
